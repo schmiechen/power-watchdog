@@ -1,11 +1,19 @@
 # Hughes Power Watchdog BLE Integration
 
-Reverse-engineered BLE protocol for the Hughes Autoformers Power Watchdog RV surge protector. Enables integration with Node-RED, Home Assistant, and other platforms without the proprietary app.
+Reverse-engineered BLE protocol for the Hughes Autoformers Power Watchdog RV EPO surge protector. Enables integration with CoachProxy, Node-RED, Home Assistant, and other platforms without the proprietary app.
+
+![Dashboard screenshot](assets/Watchdog_CoachProxy_Status.png)
 
 ## Supported Hardware
 
 - Hughes Power Watchdog Gen I 50A (confirmed)
 - Likely compatible with other BLE-equipped Power Watchdog models (Gen I 30A, etc.)
+
+## Limitations
+- 30 second polling interval, timestamped on the display, frees up the BLE controller on the pi for other tasks.
+- Does not display or alert to any errors detected by the Watchdog
+- The Hughes Watchdog App and this integration cannot be connected at the same time. This is a BLE limitation. All lines will blank when app is connected.
+- Does not write/reset anything back to the unit.
 
 ## Quick Start (Raspberry Pi)
 
