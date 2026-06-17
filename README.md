@@ -1,115 +1,165 @@
-# Hughes Power Watchdog BLE Protocol
+# Hughes Power Watchdog BLE Integration
 
-Reverse-engineered BLE protocol for the Hughes Autoformers Power Watchdog RV surge protector. Enables integration with Home Assistant, Node-RED, and other home automation platforms without the proprietary app.
+Reverse-engineered BLE protocol for the Hughes Autoformers Power Watchdog RV surge protector. Enables integration with Node-RED, Home Assistant, and other platforms without the proprietary app.
 
 ## Supported Hardware
 
 - Hughes Power Watchdog Gen I 50A (confirmed)
 - Likely compatible with other BLE-equipped Power Watchdog models (Gen I 30A, etc.)
 
-## Protocol Overview
+## Quick Start (Raspberry Pi)
 
-The Power Watchdog uses a BLE UART service for data transmission:
+### 1. Install
+
+```bash
+git clone https://github.com/youruser/power-watchdog.git
+cd power-watchdog
+```
+
+### 2. Run Setup
+
+The setup script discovers your Power Watchdog device and writes the config:
+
+```bash
+sudo ./setup.sh
+```
+
+This will:
+- Scan for BLE devices named "PMD"
+- Discover the correct GATT handles for your device
+- Test the connection
+- Write `/etc/power_watchdog.conf` with your device's MAC and handle
+
+### 3. Test
+
+```bash
+sudo python3 power_watchdog_ble.py
+```
+
+### 4. Deploy to CoachProxy (optional)
+
+```bash
+sudo cp power_watchdog_ble.py /coachproxy/power_watchdog_ble.py
+```
+
+Then import `nodered/power_watchdog_flow.json` into Node-RED.
+
+## Requirements
+
+- Raspberry Pi (or any Linux with BLE)
+- BlueZ (`gatttool` command): `sudo apt-get install bluez`
+- Python 3.5+ (stdlib only, no pip)
+- Power Watchdog connected to shore power and within BLE range (~30 ft)
+
+## Configuration
+
+The script reads device settings from a JSON config file. Searched in order:
+
+1. `/etc/power_watchdog.conf`
+2. `/coachproxy/power_watchdog.conf`
+3. `./config.json` (same directory as script)
+
+Config format:
+
+```json
+{
+  "mac": "F0:F8:F2:FA:24:03",
+  "cccd": "0x0021"
+}
+```
+
+You can also pass these as arguments:
+
+```bash
+sudo python3 power_watchdog_ble.py AA:BB:CC:DD:EE:FF --cccd 0x0021
+```
+
+## Protocol
+
+The Power Watchdog uses a BLE UART service:
 
 | Property | Value |
 |----------|-------|
 | Device name prefix | `PMD` |
 | Service UUID | `0xFFE0` |
-| TX Characteristic (data out) | `0xFFE2` (Notify, Read) |
-| RX Characteristic (commands in) | `0xFFE1` (Read, Write) |
+| TX Characteristic (notifications) | `0xFFE2` |
+| RX Characteristic (commands) | `0xFFE1` |
 
-### Packet Format
-
-Data arrives as pairs of 20-byte BLE notifications (~1 pair per second per line):
-
-- **Packet 1:** Header — starts with `01 03 20`
-- **Packet 2:** Continuation data
-
-Combined into a 40-byte frame and parsed as:
+Data arrives as 20-byte notification pairs (~1 pair/sec/line). Combined into 40 bytes:
 
 | Byte Offset | Field | Conversion |
 |-------------|-------|------------|
-| 3–6 | Voltage | `byte4(3) / 10000` → Volts |
-| 7–10 | Current | `byte4(7) / 10000` → Amps |
-| 11–14 | Power | `byte4(11) / 10000` → Watts |
-| 15–18 | Energy | `byte4(15) / 10000` → kWh |
-| 31–34 | Frequency | `byte4(31) / 100` → Hz |
+| 3-6 | Voltage | `byte4(3) / 10000` → Volts |
+| 7-10 | Current | `byte4(7) / 10000` → Amps |
+| 11-14 | Power | `byte4(11) / 10000` → Watts |
+| 15-18 | Energy | `byte4(15) / 10000` → kWh |
+| 31-34 | Frequency | `byte4(31) / 100` → Hz |
 | 19 | Error Code | `0` = OK |
-| 37–39 | Line ID | `01,01,01` = Line 2; `00,00,00` = Line 1 |
+| 37-39 | Line ID | `01,01,01` = Line 2; `00,00,00` = Line 1 |
 
-Where `byte4` reads 4 bytes as a big-endian unsigned 32-bit integer:
+`byte4` = big-endian unsigned 32-bit: `b[0]*16777216 + b[1]*65536 + b[2]*256 + b[3]`
 
-```
-value = byte[0] * 16777216 + byte[1] * 65536 + byte[2] * 256 + byte[3]
-```
-
-### Line Identification (50A / Split-Phase)
-
-The 50A model monitors two legs of a split-phase 240V connection. Both lines stream independently at ~1 Hz. Bytes 37–39 distinguish them.
-
-## Quick Start
-
-### Node.js (macOS / Linux with BLE)
-
-```bash
-npm install
-node watchdog.js
-```
-
-Requires a BLE adapter. On macOS, uses CoreBluetooth natively. On Linux, needs BlueZ and appropriate permissions.
-
-### Python + gatttool (Raspberry Pi / Linux)
-
-```bash
-# Find the device
-sudo hcitool lescan  # look for "PMD ..."
-
-# Discover handles
-sudo gatttool -b XX:XX:XX:XX:XX:XX --characteristics
-
-# Run the monitor
-sudo python3 watchdog_gatttool.py XX:XX:XX:XX:XX:XX
-```
-
-No pip dependencies — uses only Python stdlib + `gatttool` subprocess.
-
-## Output Example
+## Output
 
 ```json
 {
-  "line1": {"voltage": 124.6, "amps": 0.5, "watts": 21.2, "frequency": 60.1, "energy_kwh": 4204.8},
-  "line2": {"voltage": 124.8, "amps": 1.0, "watts": 76.3, "frequency": 60.1, "energy_kwh": 3162.6},
+  "line1": {"voltage": 124.6, "amps": 0.47, "watts": 21.2, "frequency": 60.05, "energy_kwh": 4204.8},
+  "line2": {"voltage": 124.8, "amps": 1.82, "watts": 144.1, "frequency": 60.05, "energy_kwh": 3162.6},
   "total_energy_kwh": 7367.4,
   "error_code": 0,
   "timestamp": 1718644800
 }
 ```
 
-## Integration Examples
+On failure: `{"error": "timeout"}` or `{"error": "no_config"}`
 
-### Node-RED
+## Node-RED Dashboard
 
-Use an `exec` node to run the script on a 30-second timer, parse the JSON output, and feed to dashboard widgets.
+Import `nodered/power_watchdog_flow.json` for a ready-made dashboard with:
+- Digital 7-segment display (DSEG7 font, embedded offline)
+- Power Watchdog logo
+- Two-column Line 1 / Line 2 layout
+- Voltage, Amps, Frequency, Watts per line
+- Total energy counter
+- Last-updated timestamp
 
-### Home Assistant
+The flow polls every 30 seconds via an exec node. No manual wiring needed after import.
 
-Run as a command-line sensor or wrap as an MQTT publisher for real-time updates.
+## Files
+
+| File | Purpose |
+|------|---------|
+| `power_watchdog_ble.py` | Production script (config-based, for deployment) |
+| `setup.sh` | Auto-discover device and write config |
+| `config.json.example` | Config template |
+| `watchdog_gatttool.py` | Standalone script (MAC as CLI arg, no config needed) |
+| `watchdog.js` | Node.js prototype (macOS/Linux with noble) |
+| `nodered/power_watchdog_flow.json` | Node-RED flow with dashboard |
+| `assets/logo.png` | Transparent logo for dashboard |
+
+## Troubleshooting
+
+**"No PMD device found" during setup:**
+- Power Watchdog must be on shore power to broadcast BLE
+- Disconnect the Hughes app first (only one BLE connection at a time)
+- Try resetting the BLE adapter: `sudo hciconfig hci0 down && sudo hciconfig hci0 up`
+
+**Script returns `{"error": "timeout"}`:**
+- Device may be out of range or asleep
+- Another process may hold the BLE connection (Hughes app, another script instance)
+- Try running setup again to verify connectivity
+
+**CCCD handle is wrong:**
+- Run `sudo gatttool -b <MAC> --characteristics` and find the UUID `ffe2` line
+- The CCCD is typically the value handle + 1
+- Update your config file with the correct handle
 
 ## How This Was Reverse-Engineered
 
-1. Connected to the device with [LightBlue](https://punchthrough.com/lightblue/) BLE explorer
-2. Identified the UART service (0xFFE0) and TX/RX characteristics
-3. Captured raw notification data under varying loads
-4. Decompiled the official Android app (`com.hughes.epo`) to extract parsing logic
-5. Key source: `radinet.powerwatchdog2.Util.Bluetooth.BluetoothHandle.getPowerWatchdogData()`
-
-## Limitations
-
-- BLE range is limited (~30 ft typical, depends on environment)
-- Only one device can hold an active GATT connection at a time
-- The Hughes app must be disconnected before connecting with these tools
-- Energy readings are per-line (total = line1 + line2)
-- Error code meanings are not fully documented (only `0` = OK is confirmed)
+1. Captured BLE traffic with LightBlue explorer
+2. Identified UART service (0xFFE0) and TX/RX characteristics
+3. Decompiled the Android app (`com.hughes.epo`)
+4. Key source: `BluetoothHandle.getPowerWatchdogData()` + `Util.byte4ToDouble()`
 
 ## License
 
