@@ -19,7 +19,7 @@
         "p": "payload"
       }
     ],
-    "repeat": "30",
+    "repeat": "15",
     "crontab": "",
     "once": true,
     "onceDelay": "10",
@@ -38,7 +38,7 @@
     "id": "pw_exec_001",
     "type": "exec",
     "z": "5a05b8f3.894b88",
-    "command": "sudo python3 /coachproxy/power_watchdog_ble.py",
+    "command": "sudo timeout 5 python3 /coachproxy/power_watchdog_ble.py",
     "addpay": false,
     "append": "",
     "useSpawn": "false",

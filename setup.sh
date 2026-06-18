@@ -24,9 +24,8 @@ if ! command -v gatttool &> /dev/null; then
     exit 1
 fi
 
-# Reset adapter
-echo "Resetting BLE adapter..."
-hciconfig hci0 down 2>/dev/null || true
+# Ensure adapter is up (do NOT disable bluetoothd or reset adapter on Pi Zero W)
+echo "Ensuring BLE adapter is up..."
 hciconfig hci0 up
 sleep 1
 

@@ -3,6 +3,7 @@
 
 Reads device config from a JSON config file or command-line args.
 Outputs one JSON line to stdout per invocation, then exits.
+Retries once with adapter reset on connection failure.
 
 Usage:
   sudo python3 power_watchdog_ble.py                         # uses /etc/power_watchdog.conf
@@ -24,8 +25,9 @@ DEFAULT_CONFIG_PATHS = [
     os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'),
 ]
 DEFAULT_CCCD = "0x0021"
-COLLECT_SECONDS = 5
-HARD_TIMEOUT = 10
+COLLECT_SECONDS = 2
+HARD_TIMEOUT = 3
+
 
 
 def load_config(config_path=None):
@@ -79,32 +81,47 @@ def parse_hex_line(line):
     return [int(b, 16) for b in m.group(1).strip().split()]
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Read Hughes Power Watchdog BLE data"
-    )
-    parser.add_argument("mac", nargs="?", default=None,
-                        help="BLE MAC address (overrides config)")
-    parser.add_argument("--cccd", default=None,
-                        help="CCCD handle (default: from config or 0x0021)")
-    parser.add_argument("--config", default=None,
-                        help="Path to config JSON file")
-    args = parser.parse_args()
-
-    config = load_config(args.config)
-
-    mac = args.mac or config.get("mac")
-    cccd = args.cccd or config.get("cccd", DEFAULT_CCCD)
-
-    if not mac:
-        sys.stderr.write(
-            "Error: No MAC address. Provide via argument, config file, or run setup.sh\n"
-            "Searched: " + ", ".join(DEFAULT_CONFIG_PATHS) + "\n"
+def ensure_adapter_ready():
+    """Ensure adapter is UP. Only stop bluetoothd if it's actively running."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", "bluetooth"],
+            capture_output=True, timeout=2
         )
-        print(json.dumps({"error": "no_config"}))
-        sys.exit(1)
+        if result.returncode == 0:
+            subprocess.run(["systemctl", "stop", "bluetooth"],
+                           capture_output=True, timeout=2)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    try:
+        subprocess.run(["hciconfig", "hci0", "up"],
+                       capture_output=True, timeout=2)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+
+
+
+def hci_connect(mac):
+    """Establish HCI-level LE connection. DANGEROUS on Pi Zero W — use sparingly."""
+    try:
+        result = subprocess.run(
+            ["timeout", "1", "hcitool", "lecc", mac],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2
+        )
+        return b"Connection handle" in result.stdout
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def attempt_poll(mac, cccd, use_lecc=False):
+    timeout = HARD_TIMEOUT
+
+    if use_lecc:
+        hci_connect(mac)
 
     cmd = [
+        "timeout", str(timeout),
         "gatttool", "-b", mac,
         "--char-write-req",
         "--handle=" + cccd,
@@ -117,8 +134,7 @@ def main():
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
     except OSError as e:
-        print(json.dumps({"error": "failed to start gatttool: " + str(e)}))
-        sys.exit(1)
+        return {"success": False, "stderr": str(e)}
 
     line1 = None
     line2 = None
@@ -126,7 +142,7 @@ def main():
     start = time.time()
 
     try:
-        while time.time() - start < HARD_TIMEOUT:
+        while time.time() - start < timeout:
             if line1 and line2:
                 break
 
@@ -138,6 +154,10 @@ def main():
 
             text = raw.decode("utf-8", errors="replace").strip()
             if "Notification handle" not in text:
+                if "connect error" in text.lower() or "error" in text.lower():
+                    proc.terminate()
+                    stderr = proc.stderr.read().decode("utf-8", errors="replace")
+                    return {"success": False, "stderr": text + " " + stderr}
                 continue
 
             hex_bytes = parse_hex_line(text)
@@ -168,8 +188,8 @@ def main():
             proc.kill()
 
     if not line1 and not line2:
-        print(json.dumps({"error": "timeout"}))
-        sys.exit(1)
+        stderr = proc.stderr.read().decode("utf-8", errors="replace")
+        return {"success": False, "stderr": stderr.strip() or "no data received"}
 
     output = {"timestamp": int(time.time())}
 
@@ -202,7 +222,46 @@ def main():
         error_code = line2["error_code"]
     output["error_code"] = error_code
 
-    print(json.dumps(output))
+    return {"success": True, "data": output}
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Read Hughes Power Watchdog BLE data"
+    )
+    parser.add_argument("mac", nargs="?", default=None,
+                        help="BLE MAC address (overrides config)")
+    parser.add_argument("--cccd", default=None,
+                        help="CCCD handle (default: from config or 0x0021)")
+    parser.add_argument("--config", default=None,
+                        help="Path to config JSON file")
+    args = parser.parse_args()
+
+    config = load_config(args.config)
+
+    mac = args.mac or config.get("mac")
+    cccd = args.cccd or config.get("cccd", DEFAULT_CCCD)
+
+    if not mac:
+        sys.stderr.write(
+            "Error: No MAC address. Provide via argument, config file, or run setup.sh\n"
+            "Searched: " + ", ".join(DEFAULT_CONFIG_PATHS) + "\n"
+        )
+        print(json.dumps({"error": "no_config"}))
+        sys.exit(1)
+
+    ensure_adapter_ready()
+
+    result = attempt_poll(mac, cccd, use_lecc=False)
+
+    if result["success"]:
+        print(json.dumps(result["data"]))
+        sys.exit(0)
+
+    sys.stderr.write("Failed: %s\n" % result.get("stderr", ""))
+
+    print(json.dumps({"error": "timeout"}))
+    sys.exit(1)
 
 
 if __name__ == "__main__":
