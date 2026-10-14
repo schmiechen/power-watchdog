@@ -256,14 +256,10 @@ class StreamTests(unittest.TestCase):
             self.assertIn("--value=0100", argv)  # the only value ever written: enable notifications
             self.assertNotIn("--char-read", argv)
 
-    def test_no_cccd_mode_writes_nothing(self):
-        with tempfile.NamedTemporaryFile(mode="r") as log:
-            run(["--once", "--no-cccd"], env_extra={"PW_FAKE_ARGV_LOG": log.name})
-            calls = read_lines(log.name)
-        self.assertTrue(calls)
-        for argv in calls:
-            self.assertFalse([a for a in argv if a.startswith("--char-write") or a.startswith("--value")])
-            self.assertIn("--listen", argv)
+    def test_gatttool_exiting_cleanly_without_data_is_no_data(self):
+        code, lines, _ = run(scenario="exit_clean")
+        self.assertEqual(code, 3)
+        self.assertEqual(lines[-1]["reason"], "no_data")
 
 
 if __name__ == "__main__":

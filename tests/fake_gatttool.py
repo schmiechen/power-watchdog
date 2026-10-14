@@ -4,7 +4,7 @@ genuine session (tests/fixtures/notifications.json) in the same text format gatt
 
 Controlled by environment variables:
   PW_FAKE_SCENARIO   normal | line1_only | connect_error | adapter_error | no_data | slow_connect | drop_after |
-                     ignore_term | garbage
+                     ignore_term | garbage | exit_clean
   PW_FAKE_SPEED      replay speed multiplier (default 1)
   PW_FAKE_ARGV_LOG   append the arguments it was started with (JSON, one line) to this file
   PW_FAKE_PIDFILE    write its own pid here (so tests can check it really exits)
@@ -87,6 +87,8 @@ elif scenario == "garbage":
     say("Notification handle = 0x0020 value: 01 02 03 ")
     say("something unrelated")
     time.sleep(60)
+elif scenario == "exit_clean":
+    sys.exit(0)
 elif scenario == "drop_after":
     replay(load_packets(False), stop_after=1.0)
     sys.exit(1)

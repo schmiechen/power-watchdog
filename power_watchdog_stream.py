@@ -5,11 +5,11 @@ Start it and it connects, then prints one JSON line per second on stdout. Stop i
 with --stop-on-stdin-eof; --max-seconds; --once) and it disconnects cleanly, which frees the unit for other apps. The
 unit allows only ONE connection at a time, so run this only while someone is actually looking at the data.
 
-Read-only: nothing is ever written to the device except the standard "enable notifications" descriptor write (and even
-that can be skipped with --no-cccd). It never stops bluetoothd and never resets the adapter.
+Read-only: the only thing ever written to the device is the standard "enable notifications" descriptor write, the same
+one the official app performs. It never stops bluetoothd and never resets the adapter.
 
 Usage:
-  python3 power_watchdog_stream.py [MAC] [--config PATH] [--once] [--max-seconds N] [--no-cccd]
+  python3 power_watchdog_stream.py [MAC] [--config PATH] [--once] [--max-seconds N]
                                    [--stop-on-stdin-eof] [--exit-with-parent]
 
 Output (one JSON object per line):
@@ -137,13 +137,8 @@ class Reading(object):
 
 
 def build_command(args, mac, cccd):
-    cmd = [args.gatttool, "-b", mac]
-    if args.no_cccd:
-        # Any gatttool "action" works as the trigger for --listen; the unit streams without a notification enable.
-        cmd += ["--primary", "--listen"]
-    else:
-        cmd += ["--char-write-req", "--handle=" + cccd, "--value=0100", "--listen"]
-    return cmd
+    # --listen only keeps gatttool open together with a write action, so the notification enable is that action.
+    return [args.gatttool, "-b", mac, "--char-write-req", "--handle=" + cccd, "--value=0100", "--listen"]
 
 
 def run_attempt(args, mac, cccd, started_at):
@@ -177,9 +172,13 @@ def run_attempt(args, mac, cccd, started_at):
             if fd in ready:
                 chunk = os.read(fd, 4096)
                 if not chunk:  # gatttool exited
-                    proc.wait()
-                    detail = last_error or "gatttool exited (%s)" % proc.returncode
-                    return "failed", classify(detail), detail, got_data
+                    rc = proc.wait()
+                    detail = last_error or "gatttool exited (%s)" % rc
+                    if last_error:
+                        reason = classify(last_error)
+                    else:  # exited on its own without an error message or any readings
+                        reason = "no_data" if rc == 0 else "in_use_or_unreachable"
+                    return "failed", reason, detail, got_data
                 buf += chunk
                 while b"\n" in buf:
                     raw, buf = buf.split(b"\n", 1)
@@ -226,7 +225,6 @@ def main():
     p.add_argument("mac", nargs="?", default=None, help="device address (default: from the config file)")
     p.add_argument("--config", default=None, help="config JSON path (default: /etc/power_watchdog.conf, ...)")
     p.add_argument("--cccd", default=None, help="notification descriptor handle (default: config or 0x0021)")
-    p.add_argument("--no-cccd", action="store_true", help="do not write the notification descriptor at all")
     p.add_argument("--once", action="store_true", help="exit after the first reading")
     p.add_argument("--max-seconds", type=float, default=0, help="stop after this many seconds (0 = no limit)")
     p.add_argument("--interval", type=float, default=1.0, help="seconds between readings (default 1)")
