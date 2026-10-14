@@ -19,6 +19,7 @@ node-red-dashboard 2.19.2): the live reader connects, streams, and disconnects c
 
 - Node-RED runs as the `pi` user and the reader runs as root through `sudo`, so Node-RED cannot signal it. The flow therefore
   stops the reader through a keep-alive file (`PW_KEEPALIVE`, in `/dev/shm`), which works regardless of who owns the reader.
+  (Verified on the Pi: the reader and its Bluetooth process are gone within about 2 seconds of the file being removed.)
 - `bluetoothd` is started at boot there (via `bthelper@hci0`). Leave it running; the old polling script that stopped it
   stopped working after a reboot (gatttool: "Function not implemented (38)").
 - The Pi Zero W has one core and shares one chip between Wi-Fi and Bluetooth. If its Wi-Fi drops, turn Wi-Fi power save off

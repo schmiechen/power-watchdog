@@ -25,7 +25,11 @@
 // Why a keep-alive file: signals cannot be relied on. When the reader runs as root through sudo, Node-RED (a normal
 // user) is not allowed to signal it, so a plain "kill" silently does nothing and the Watchdog stays connected. The
 // controller therefore also refreshes a small file while the reader should run and deletes it to stop the reader;
-// the reader exits by itself when the file disappears or stops changing. Signals are still sent as well.
+// the reader exits by itself when the file disappears or stops changing.
+//
+// Signals are only a last resort, and deliberately NOT the first thing sent: in Node-RED 2.x the exec node forgets a
+// process whose kill failed (an EPERM from a root-owned reader), and then never reports that process's exit. So a stop
+// first removes the file and waits for the exit report; only if nothing happens for a few seconds are signals tried.
 
 var NOW = Date.now();
 var num = function (v, d) { var n = parseFloat(v); return isFinite(n) && n > 0 ? n : d; };
@@ -33,6 +37,7 @@ var CFG = {
     grace: num(env.get("PW_GRACE"), 15) * 1000,
     lease: num(env.get("PW_LEASE"), 15) * 1000,
     cap: num(env.get("PW_CAP"), 3600) * 1000,
+    termAfter: 4000,
     killEvery: 5000,
     stuckAfter: 30000,
     keepalive: env.get("PW_KEEPALIVE") || "/dev/shm/power-watchdog.keepalive",
@@ -134,9 +139,8 @@ function start() {
 }
 
 function stop(next) {
-    S.state = "stopping"; S.afterStop = next; S.stopSentAt = NOW; S.lastKill = NOW; S.killed = false;
-    removeKeepalive();   // works whoever owns the reader
-    node.send([{ kill: "SIGTERM", payload: "" }, null, null, null, null]);
+    S.state = "stopping"; S.afterStop = next; S.stopSentAt = NOW; S.lastKill = 0; S.termSent = false; S.killed = false;
+    removeKeepalive();   // works whoever owns the reader; no signal yet (see the note at the top)
 }
 
 function finishStop() {
@@ -179,9 +183,11 @@ function evaluate() {
             break;
         case "stopping":
             if (v > 0 && S.afterStop === "idle") { S.restart = true; }
-            if (NOW - S.lastKill >= CFG.killEvery) {      // keep trying; never assume the reader is gone
+            if (!S.termSent && NOW - S.stopSentAt >= CFG.termAfter) {        // the file did not do it: try signals
+                S.termSent = true; S.lastKill = NOW;
+                node.send([{ kill: "SIGTERM", payload: "" }, null, null, null, null]);
+            } else if (S.termSent && NOW - S.lastKill >= CFG.killEvery) {      // and keep trying; never assume it is gone
                 S.lastKill = NOW; S.killed = true;
-                removeKeepalive();
                 node.send([{ kill: "SIGKILL", payload: "" }, null, null, null, null]);
             }
             if (NOW - S.stopSentAt > CFG.stuckAfter && S.reason !== "stop_failed") {
@@ -208,8 +214,8 @@ if (t === "lease") {
     evaluate();
 } else if (t === "retry") {
     if (S.state === "stopping") {
-        S.lastKill = NOW; removeKeepalive();
-        node.send([{ kill: "SIGKILL", payload: "" }, null, null, null, null]);
+        S.lastKill = NOW; S.termSent = true;
+        node.send([{ kill: S.killed ? "SIGKILL" : "SIGTERM", payload: "" }, null, null, null, null]);
     } else if (viewers() > 0 && (S.state === "unavailable" || S.state === "paused" || S.state === "idle")) {
         start(); widget();
     }

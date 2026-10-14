@@ -123,11 +123,14 @@ If the Watchdog is busy (for example the Hughes app is connected), the widget sa
 | `PW_KEEPALIVE` | `/dev/shm/power-watchdog.keepalive` | small file the flow keeps refreshing while the reader should run; the reader stops by itself when it disappears (see below) |
 | `PW_KA_TIMEOUT` | `15` | seconds without a refresh before the reader stops by itself |
 
-**Why a keep-alive file?** The flow stops the reader with a signal, but a normal user may not signal a process owned by root.
-If the reader runs through `sudo` (`PW_LAUNCHER=sudo`), the signal is silently refused and the Watchdog would stay connected.
-So the flow also refreshes a small file while the reader should run and deletes it to stop it; the reader exits by itself when
-the file disappears or stops changing. This also frees the Watchdog if Node-RED itself dies. The file must be writable by the
-user Node-RED runs as and readable by the reader (the default in `/dev/shm` is fine on Linux).
+**Why a keep-alive file?** A normal user may not signal a process owned by root. If the reader runs through `sudo`
+(`PW_LAUNCHER=sudo`), a stop signal is silently refused and the Watchdog would stay connected. So the flow refreshes a small
+file while the reader should run and **deletes it to stop it**; the reader exits by itself when the file disappears or stops
+changing, and Node-RED then reports its exit. Signals are only a last resort after a few seconds of silence. (They are not
+sent first on purpose: in Node-RED 2.x a refused signal makes the exec node forget the process, so its exit is never
+reported.) The file also frees the Watchdog if Node-RED itself dies. It must be writable by the user Node-RED runs as and
+readable by the reader; the default in `/dev/shm` is fine on Linux. If the controller cannot confirm the reader is gone, the
+widget says so (`stop_failed`) instead of claiming the Watchdog is free, and it will not start a second reader meanwhile.
 
 ## Troubleshooting
 

@@ -122,9 +122,10 @@ test("the reader is stopped 15 s after the last viewer leaves, not before", () =
     assert.strictEqual(h.state(), "grace");
     assert.strictEqual(h.lastWidget().state, "live");   // still showing live data while waiting
     h.advance(14);
-    assert.deepStrictEqual(h.kills(), []);
+    assert.strictEqual(h.deletes().length, 0, "nothing stopped yet");
     h.advance(2);
-    assert.deepStrictEqual(h.kills(), ["SIGTERM"]);
+    assert.strictEqual(h.deletes().length, 1, "stop = keep-alive file removed");
+    assert.deepStrictEqual(h.kills(), [], "and no signal is sent first (it could make the exec node forget the reader)");
     h.exit(0);
     assert.strictEqual(h.state(), "idle");
     h.advance(3);
@@ -139,7 +140,7 @@ test("coming back during the grace period keeps the same connection", () => {
     h.advance(8);
     h.lease("b", true);
     h.advance(30, ["b"]);
-    assert.deepStrictEqual(h.kills(), []);
+    assert.strictEqual(h.deletes().length, 0);
     assert.strictEqual(h.starts().length, 1);
     assert.strictEqual(h.state(), "live");
 });
@@ -149,9 +150,9 @@ test("a viewer that just vanishes (closed browser, lost WiFi) is released after 
     h.lease("a");
     h.out(LIVE);
     h.advance(14);
-    assert.deepStrictEqual(h.kills(), []);
+    assert.strictEqual(h.deletes().length, 0);
     h.advance(20);
-    assert.deepStrictEqual(h.kills(), ["SIGTERM"]);
+    assert.strictEqual(h.deletes().length, 1);
 });
 
 test("heartbeats every 5 s keep the connection up", () => {
@@ -159,6 +160,7 @@ test("heartbeats every 5 s keep the connection up", () => {
     h.lease("a");
     h.out(LIVE);
     h.advance(120, ["a"]);
+    assert.strictEqual(h.deletes().length, 0);
     assert.deepStrictEqual(h.kills(), []);
     assert.strictEqual(h.state(), "live");
 });
@@ -169,10 +171,10 @@ test("two viewers: the reader stays until the last one leaves", () => {
     h.out(LIVE);
     h.lease("a", false);
     h.advance(40, ["b"]);
-    assert.deepStrictEqual(h.kills(), []);
+    assert.strictEqual(h.deletes().length, 0);
     h.lease("b", false);
     h.advance(16);
-    assert.deepStrictEqual(h.kills(), ["SIGTERM"]);
+    assert.strictEqual(h.deletes().length, 1);
 });
 
 test("PW_GRACE is honoured", () => {
@@ -181,9 +183,9 @@ test("PW_GRACE is honoured", () => {
     h.out(LIVE);
     h.lease("a", false);
     h.advance(4);
-    assert.deepStrictEqual(h.kills(), []);
+    assert.strictEqual(h.deletes().length, 0);
     h.advance(2);
-    assert.deepStrictEqual(h.kills(), ["SIGTERM"]);
+    assert.strictEqual(h.deletes().length, 1);
 });
 
 test("unavailable is reported once, with a plain-language message, and is not retried automatically", () => {
@@ -252,7 +254,7 @@ test("a session is paused after the cap, then resumes on Retry", () => {
     h.lease("a");
     h.out(LIVE);
     h.advance(65, ["a"]);
-    assert.deepStrictEqual(h.kills(), ["SIGTERM"]);
+    assert.strictEqual(h.deletes().length, 1);
     h.exit(0);
     assert.strictEqual(h.state(), "paused");
     const w = h.lastWidget();
@@ -269,8 +271,10 @@ test("a reader that cannot be signalled is never reported as released until it r
     h.out(LIVE);
     h.lease("a", false);
     h.advance(16);                                   // grace over: stop requested
-    assert.deepStrictEqual(h.kills(), ["SIGTERM"]);
     assert.ok(h.deletes().length >= 1, "the keep-alive file is removed so a reader that ignores signals still stops");
+    assert.deepStrictEqual(h.kills(), [], "no signal in the first seconds");
+    h.advance(5);
+    assert.deepStrictEqual(h.kills(), ["SIGTERM"], "signals are a last resort, after a few seconds");
     h.advance(6);
     assert.ok(h.kills().indexOf("SIGKILL") >= 0, "escalates to SIGKILL");
     h.advance(40);                                   // no exit message ever arrives
@@ -282,6 +286,15 @@ test("a reader that cannot be signalled is never reported as released until it r
     assert.strictEqual(h.starts().length, 1);
     h.exit(0);                                       // it finally exits
     assert.strictEqual(h.starts().length, 2, "then the waiting viewer gets a fresh reader");
+});
+
+test("an exit reported right after the keep-alive removal ends the stop with no signal at all", () => {
+    const h = harness();
+    h.lease("a"); h.out(LIVE); h.lease("a", false); h.advance(16);
+    h.advance(1);
+    h.exit(0);
+    assert.strictEqual(h.state(), "idle");
+    assert.deepStrictEqual(h.kills(), [], "a signal could have made Node-RED 2.x forget the reader");
 });
 
 test("the keep-alive file is refreshed with changing content while a session exists, and removed on stop", () => {
@@ -318,7 +331,7 @@ test("Retry while a stop is stuck re-sends the stop", () => {
     const kills = h.kills().length;
     h.lease("a", true);
     h.retry();
-    assert.ok(h.kills().length > kills);
+    assert.ok(h.kills().length > kills, "Retry sends a signal straight away");
 });
 
 test("a viewer arriving while the reader is shutting down gets a fresh start afterwards", () => {

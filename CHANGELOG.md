@@ -11,7 +11,9 @@
 
 - Keep-alive file stop mechanism (`--keepalive-file`) so the reader can be stopped even when it cannot be signalled (a reader
   running as root through sudo, launched by a normal-user Node-RED). Found on a real Pi: signals were silently refused and the
-  Watchdog stayed connected after the "release".
+  Watchdog stayed connected after the "release". A stop now removes the file first and waits for the reader's exit;
+  signals are only a last resort, because in Node-RED 2.x a refused signal makes the exec node forget the process and
+  never report its exit. The controller no longer claims "idle" until the exit is confirmed.
 
 ### Fixed
 - The polling script stopped `bluetoothd` on every run, which left the adapter unable to make LE connections after a reboot
