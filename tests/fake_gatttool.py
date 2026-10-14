@@ -6,6 +6,7 @@ Controlled by environment variables:
   PW_FAKE_SCENARIO   normal | line1_only | connect_error | adapter_error | no_data | slow_connect | drop_after |
                      ignore_term | garbage | exit_clean
   PW_FAKE_SPEED      replay speed multiplier (default 1)
+  PW_FAKE_LOOP       set to 1 to replay the recording over and over (for long manual demos)
   PW_FAKE_ARGV_LOG   append the arguments it was started with (JSON, one line) to this file
   PW_FAKE_PIDFILE    write its own pid here (so tests can check it really exits)
 """
@@ -93,5 +94,9 @@ elif scenario == "drop_after":
     replay(load_packets(False), stop_after=1.0)
     sys.exit(1)
 else:
-    replay(load_packets(scenario == "line1_only"))
+    packets = load_packets(scenario == "line1_only")
+    while True:
+        replay(packets)
+        if os.environ.get("PW_FAKE_LOOP") != "1":
+            break
     time.sleep(60)
