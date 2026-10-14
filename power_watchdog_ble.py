@@ -82,15 +82,19 @@ def parse_hex_line(line):
 
 
 def ensure_adapter_ready():
-    """Ensure adapter is UP. Only stop bluetoothd if it's actively running."""
+    """Make sure the adapter is UP, without touching bluetoothd.
+
+    Do NOT stop bluetoothd here: when it is running (it is started at boot on
+    CoachProxyOS), stopping it powers the adapter off and leaves it unable to
+    make LE connections, so gatttool fails with "Function not implemented (38)".
+    """
     try:
         result = subprocess.run(
-            ["systemctl", "is-active", "bluetooth"],
-            capture_output=True, timeout=2
+            ["hciconfig", "hci0"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2
         )
-        if result.returncode == 0:
-            subprocess.run(["systemctl", "stop", "bluetooth"],
-                           capture_output=True, timeout=2)
+        if b"UP RUNNING" in result.stdout:
+            return
     except (subprocess.TimeoutExpired, OSError):
         pass
     try:
