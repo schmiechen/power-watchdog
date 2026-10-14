@@ -244,6 +244,74 @@ class StreamTests(unittest.TestCase):
             self.assertTrue(wait_gone(stream_pid), "stream script outlived its parent")
             self.assertTrue(wait_gone(child), "gatttool outlived the stream script")
 
+    # ---- keep-alive file: a stop method that needs no signals (the Pi runs the reader as root through sudo) ----
+    def _keepalive_file(self):
+        fh = tempfile.NamedTemporaryFile("w", suffix=".keepalive", delete=False)
+        fh.write("0")
+        fh.close()
+        self.addCleanup(lambda: os.path.exists(fh.name) and os.unlink(fh.name))
+        return fh.name
+
+    def test_deleting_the_keepalive_file_stops_the_reader_without_any_signal(self):
+        path = self._keepalive_file()
+        with tempfile.NamedTemporaryFile() as pf:
+            proc = self._start(extra=["--keepalive-file", path, "--keepalive-timeout", "30"], pidfile=pf.name)
+            self._wait_live(proc)
+            child = wait_int(pf.name)
+            os.unlink(path)
+            t0 = time.time()
+            self.assertEqual(proc.wait(timeout=8), 0)
+            self.assertLess(time.time() - t0, 5)
+            self.assertTrue(wait_gone(child, 5), "gatttool child was left running")
+
+    def test_a_keepalive_file_that_stops_changing_stops_the_reader(self):
+        path = self._keepalive_file()
+        proc = self._start(extra=["--keepalive-file", path, "--keepalive-timeout", "2"])
+        self._wait_live(proc)
+        t0 = time.time()
+        self.assertEqual(proc.wait(timeout=10), 0)
+        self.assertLess(time.time() - t0, 8)
+
+    def test_a_keepalive_file_that_keeps_changing_keeps_the_reader_running(self):
+        path = self._keepalive_file()
+        proc = self._start(extra=["--keepalive-file", path, "--keepalive-timeout", "2"])
+        self._wait_live(proc)
+        for i in range(10):                    # refresh for 5 s, well past the 2 s timeout
+            with open(path, "w") as fh:
+                fh.write(str(i + 1))
+            time.sleep(0.5)
+            self.assertIsNone(proc.poll(), "stopped while the keep-alive was still being refreshed")
+        self.assertEqual(proc.wait(timeout=10), 0)   # refreshing stops -> it stops by itself
+
+    def test_missing_keepalive_file_at_start_stops_after_the_startup_grace(self):
+        proc = self._start(extra=["--keepalive-file", "/nonexistent-dir/never.keepalive", "--keepalive-startup", "1"])
+        self.assertEqual(proc.wait(timeout=15), 0)
+
+    def test_keepalive_works_even_if_signals_cannot_reach_the_reader(self):
+        """The failure seen on the real Pi: the reader runs as root (sudo), the controller cannot signal it."""
+        path = self._keepalive_file()
+        with tempfile.NamedTemporaryFile() as pf:
+            env = dict(os.environ, PW_FAKE_SCENARIO="normal", PW_FAKE_SPEED="4", PW_FAKE_PIDFILE=pf.name)
+            # a wrapper that shields the reader from SIGTERM/SIGKILL sent to the wrapper (like sudo does for a non-root caller)
+            proc = subprocess.Popen(
+                [sys.executable, "-c",
+                 "import os,signal,subprocess,sys\n"
+                 "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                 "p=subprocess.Popen(sys.argv[1:],stdout=sys.stdout)\n"
+                 "p.wait()\n",
+                 sys.executable, STREAM, MAC, "--gatttool", FAKE, "--skip-adapter-check", "--interval", "0.2",
+                 "--settle", "0.5", "--keepalive-file", path, "--keepalive-timeout", "30"],
+                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+            self.addCleanup(lambda: [proc.poll() is None and proc.kill(), proc.wait(), proc.stdout.close(), proc.stderr.close()])
+            self._wait_live(proc)
+            child = wait_int(pf.name)
+            proc.send_signal(signal.SIGTERM)          # the "kill" that cannot get through
+            time.sleep(1.0)
+            self.assertIsNone(proc.poll(), "the wrapper should be ignoring SIGTERM")
+            os.unlink(path)                             # the signal-free stop
+            self.assertEqual(proc.wait(timeout=10), 0)
+            self.assertTrue(wait_gone(child, 5))
+
     def test_nothing_but_the_notification_enable_is_ever_written(self):
         with tempfile.NamedTemporaryFile(mode="r") as log:
             run(["--once"], env_extra={"PW_FAKE_ARGV_LOG": log.name})

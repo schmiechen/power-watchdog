@@ -19,8 +19,14 @@ Output (one JSON object per line):
   "line2" is absent on single-line (30 A) units. "reason" is one of: not_configured, adapter_not_ready,
   in_use_or_unreachable, no_data.
 
-Exit codes: 0 stopped normally (signal, --once, --max-seconds, stdin EOF); 2 no device address configured;
-            3 unavailable after the retries.
+Exit codes: 0 stopped normally (signal, --once, --max-seconds, stdin EOF, keep-alive file); 2 no device address
+            configured; 3 unavailable after the retries.
+
+Keep-alive file (--keepalive-file PATH): a way to stop the reader that needs no signals, so it also works when the
+controlling program cannot signal it (for example the reader runs as root through sudo and the controller does not).
+The controller keeps changing the file's CONTENT while it wants the reader to run; the reader stops when the file
+disappears, or its content has not changed for --keepalive-timeout seconds (measured with a monotonic clock, so a jump
+in the system time cannot trigger it). A short start-up grace lets the controller create the file first.
 """
 
 import argparse
@@ -92,10 +98,43 @@ def terminate(proc):
         proc.wait()
 
 
-def interruptible_sleep(seconds):
+def interruptible_sleep(seconds, keepalive=None):
     end = time.monotonic() + seconds
     while not STOP["flag"] and time.monotonic() < end:
+        if keepalive is not None and keepalive.expired(time.monotonic()):
+            STOP["flag"] = True
         time.sleep(0.1)
+
+
+class KeepAlive(object):
+    """Stop condition driven by a file: it must exist and its content must keep changing."""
+
+    def __init__(self, path, timeout, startup):
+        self.path = path
+        self.timeout = timeout
+        self.startup = startup
+        self.begin = time.monotonic()
+        self.seen = False
+        self.last_content = None
+        self.last_change = self.begin
+        self.next_check = 0.0
+
+    def expired(self, now):
+        if not self.path or now < self.next_check:
+            return False
+        self.next_check = now + 0.5
+        try:
+            with open(self.path, "rb") as fh:
+                content = fh.read(256)
+        except OSError:
+            if not self.seen:
+                return now - self.begin > self.startup      # never appeared: give the controller time to create it
+            return True                                      # it existed and is now gone: stop
+        self.seen = True
+        if content != self.last_content:
+            self.last_content, self.last_change = content, now
+            return False
+        return now - self.last_change > self.timeout
 
 
 class Reading(object):
@@ -141,7 +180,7 @@ def build_command(args, mac, cccd):
     return [args.gatttool, "-b", mac, "--char-write-req", "--handle=" + cccd, "--value=0100", "--listen"]
 
 
-def run_attempt(args, mac, cccd, started_at):
+def run_attempt(args, mac, cccd, started_at, keepalive):
     """One connect-and-stream attempt. Returns (outcome, reason, detail, got_data)."""
     reading = Reading(args.interval, args.settle)
     pkt, buf, last_error = None, b"", ""
@@ -161,6 +200,9 @@ def run_attempt(args, mac, cccd, started_at):
             if STOP["flag"]:
                 return "stopped", None, None, got_data
             if args.max_seconds and now - started_at >= args.max_seconds:
+                return "stopped", None, None, got_data
+            if keepalive.expired(now):
+                log(args, "keep-alive file gone or stale: stopping")
                 return "stopped", None, None, got_data
             watch = [fd] + ([0] if args.stop_on_stdin_eof else [])
             ready, _, _ = select.select(watch, [], [], 0.2)
@@ -235,6 +277,11 @@ def main():
     p.add_argument("--retry-delay", type=float, default=2.0)
     p.add_argument("--stop-on-stdin-eof", action="store_true", help="stop when stdin is closed")
     p.add_argument("--exit-with-parent", action="store_true", help="Linux: exit if the parent process dies")
+    p.add_argument("--keepalive-file", default=None, help="stop when this file disappears or stops changing")
+    p.add_argument("--keepalive-timeout", type=float, default=15.0,
+                   help="seconds without a change to the keep-alive file before stopping (default 15)")
+    p.add_argument("--keepalive-startup", type=float, default=10.0,
+                   help="seconds to wait for the keep-alive file to first appear (default 10)")
     p.add_argument("--gatttool", default=os.environ.get("PW_GATTTOOL", "gatttool"))
     p.add_argument("--skip-adapter-check", action="store_true")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -266,11 +313,12 @@ def main():
         ensure_adapter_ready()
 
     started_at = time.monotonic()
+    keepalive = KeepAlive(args.keepalive_file, args.keepalive_timeout, args.keepalive_startup)
     failures, reconnects, window_start = 0, 0, time.monotonic()
     code, last_reason, last_detail = 0, "in_use_or_unreachable", ""
     while not STOP["flag"]:
         emit({"state": "connecting", "attempt": failures + 1})
-        outcome, reason, detail, got_data = run_attempt(args, mac, cccd, started_at)
+        outcome, reason, detail, got_data = run_attempt(args, mac, cccd, started_at, keepalive)
         log(args, "attempt ended: %s %s %s" % (outcome, reason, detail))
         if outcome == "stopped":
             break
@@ -286,7 +334,7 @@ def main():
             emit({"state": "unavailable", "reason": last_reason, "detail": (last_detail or "")[:160]})
             code = 3
             break
-        interruptible_sleep(args.retry_delay)
+        interruptible_sleep(args.retry_delay, keepalive)
     sys.exit(code)
 
 

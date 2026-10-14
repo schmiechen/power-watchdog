@@ -12,12 +12,20 @@
 //   "tick"                           one-second heartbeat of this node (see output 3)
 // Output 1 -> the exec node (spawn mode, command "env"): {payload:"<args>"} to start, {kill:"SIGTERM"} to stop.
 // Output 2 -> the dashboard widget: last reading merged with {state, reason, detail, stale, message}.
+// Output 4 -> a "file" node (overwrite): the keep-alive file the reader watches (see below).
+// Output 5 -> a "file" node (delete): removes the keep-alive file.
 // Output 3 -> a 1 s delay node wired back to this node's input: asks for the next tick, only while there is
 //             something to watch (a viewer, or a session running), so an idle flow does no work at all.
 //
 // Settings come from the flow's environment variables (Node-RED tab > Environment):
 //   PW_DIR (install dir), PW_CONFIG (config file), PW_LAUNCHER ("sudo" or empty), PW_ARGS (extra reader flags),
-//   PW_GRACE (s, default 15), PW_LEASE (s, default 15), PW_CAP (s, default 3600).
+//   PW_GRACE (s, default 15), PW_LEASE (s, default 15), PW_CAP (s, default 3600),
+//   PW_KEEPALIVE (keep-alive file, default /dev/shm/power-watchdog.keepalive), PW_KA_TIMEOUT (s, default 15).
+//
+// Why a keep-alive file: signals cannot be relied on. When the reader runs as root through sudo, Node-RED (a normal
+// user) is not allowed to signal it, so a plain "kill" silently does nothing and the Watchdog stays connected. The
+// controller therefore also refreshes a small file while the reader should run and deletes it to stop the reader;
+// the reader exits by itself when the file disappears or stops changing. Signals are still sent as well.
 
 var NOW = Date.now();
 var num = function (v, d) { var n = parseFloat(v); return isFinite(n) && n > 0 ? n : d; };
@@ -25,8 +33,10 @@ var CFG = {
     grace: num(env.get("PW_GRACE"), 15) * 1000,
     lease: num(env.get("PW_LEASE"), 15) * 1000,
     cap: num(env.get("PW_CAP"), 3600) * 1000,
-    killAfter: 5000,
-    giveUpAfter: 8000
+    killEvery: 5000,
+    stuckAfter: 30000,
+    keepalive: env.get("PW_KEEPALIVE") || "/dev/shm/power-watchdog.keepalive",
+    kaTimeout: num(env.get("PW_KA_TIMEOUT"), 15)
 };
 var MESSAGES = {
     in_use_or_unreachable: "Watchdog not reachable. It may be in use by the Hughes app, switched off, or out of range.",
@@ -34,14 +44,15 @@ var MESSAGES = {
     no_data: "Connected, but the Watchdog sent no readings.",
     not_configured: "Not set up: the device address is missing from the config file.",
     stream_ended: "The connection ended unexpectedly.",
-    paused: "Paused to free the Watchdog. Tap Resume to continue."
+    paused: "Paused to free the Watchdog. Tap Resume to continue.",
+    stop_failed: "Could not confirm the Watchdog was released. Tap Retry; if it stays connected, restart Node-RED."
 };
 
 var S = context.get("S");
 if (!S) {
     S = { state: "idle", leases: {}, last: null, buf: "", gotLive: false, startedAt: 0, graceUntil: 0,
           stopSentAt: 0, killed: false, afterStop: "idle", restart: false, reason: null, detail: null,
-          tickPending: false };
+          tickPending: false, ka: 0 };
 }
 
 function viewers() {
@@ -57,7 +68,9 @@ function shown() {
     switch (S.state) {
         case "live": return "live";
         case "grace": return S.gotLive ? "live" : "connecting";
-        case "stopping": return S.afterStop === "paused" ? "paused" : "connecting";
+        case "stopping":
+            if (S.reason === "stop_failed") { return "unavailable"; }
+            return S.afterStop === "paused" ? "paused" : "connecting";
         case "starting":
         case "idle": return "connecting";
         default: return S.state;   // "unavailable", "paused"
@@ -70,7 +83,7 @@ function widget() {
     p.state = shown();
     p.stale = p.state !== "live";
     if (S.reason) { p.reason = S.reason; p.detail = S.detail; p.message = MESSAGES[S.reason] || S.reason; }
-    node.send([null, { topic: "watchdog", payload: p }, null]);
+    node.send([null, { topic: "watchdog", payload: p }, null, null, null]);
 }
 
 function status() {
@@ -85,7 +98,7 @@ function scheduleTick() {
     var want = S.state !== "idle" || Object.keys(S.leases).length > 0;
     if (want && !S.tickPending) {
         S.tickPending = true;
-        node.send([null, null, { topic: "tick" }]);
+        node.send([null, null, { topic: "tick" }, null, null]);
     }
 }
 
@@ -94,20 +107,36 @@ function command() {
     var parts = [];
     if (env.get("PW_LAUNCHER")) { parts.push(env.get("PW_LAUNCHER")); }
     parts.push("python3", dir + "/power_watchdog_stream.py", "--exit-with-parent", "--stop-on-stdin-eof");
+    parts.push("--keepalive-file", CFG.keepalive, "--keepalive-timeout", String(CFG.kaTimeout));
     if (env.get("PW_CONFIG")) { parts.push("--config", env.get("PW_CONFIG")); }
     if (env.get("PW_ARGS")) { parts.push(env.get("PW_ARGS")); }
     return parts.join(" ");
 }
 
+// The keep-alive file's content must keep changing; the reader stops when it stops changing or disappears.
+function refreshKeepalive() {
+    S.ka += 1; S.kaGone = false;
+    node.send([null, null, null, { filename: CFG.keepalive, payload: String(NOW) + ":" + S.ka }, null]);
+}
+
+// Remove the file once per session (a second delete would only make Node-RED log "file not found").
+function removeKeepalive() {
+    if (S.kaGone) { return; }
+    S.kaGone = true;
+    node.send([null, null, null, null, { filename: CFG.keepalive, payload: "" }]);
+}
+
 function start() {
     S.state = "starting"; S.gotLive = false; S.startedAt = NOW; S.buf = ""; S.reason = null; S.detail = null;
-    S.killed = false; S.restart = false; S.afterStop = "idle";
-    node.send([{ payload: command() }, null, null]);
+    S.killed = false; S.restart = false; S.afterStop = "idle"; S.lastKill = 0;
+    refreshKeepalive();
+    node.send([{ payload: command() }, null, null, null, null]);
 }
 
 function stop(next) {
-    S.state = "stopping"; S.afterStop = next; S.stopSentAt = NOW; S.killed = false;
-    node.send([{ kill: "SIGTERM", payload: "" }, null, null]);
+    S.state = "stopping"; S.afterStop = next; S.stopSentAt = NOW; S.lastKill = NOW; S.killed = false;
+    removeKeepalive();   // works whoever owns the reader
+    node.send([{ kill: "SIGTERM", payload: "" }, null, null, null, null]);
 }
 
 function finishStop() {
@@ -150,10 +179,14 @@ function evaluate() {
             break;
         case "stopping":
             if (v > 0 && S.afterStop === "idle") { S.restart = true; }
-            if (!S.killed && NOW - S.stopSentAt > CFG.killAfter) {
-                S.killed = true; node.send([{ kill: "SIGKILL", payload: "" }, null, null]);
+            if (NOW - S.lastKill >= CFG.killEvery) {      // keep trying; never assume the reader is gone
+                S.lastKill = NOW; S.killed = true;
+                removeKeepalive();
+                node.send([{ kill: "SIGKILL", payload: "" }, null, null, null, null]);
             }
-            if (NOW - S.stopSentAt > CFG.giveUpAfter) { finishStop(); widget(); }
+            if (NOW - S.stopSentAt > CFG.stuckAfter && S.reason !== "stop_failed") {
+                S.reason = "stop_failed"; S.detail = null; widget();
+            }
             break;
         case "unavailable":
         case "paused":
@@ -174,7 +207,10 @@ if (t === "lease") {
     }
     evaluate();
 } else if (t === "retry") {
-    if (viewers() > 0 && (S.state === "unavailable" || S.state === "paused" || S.state === "idle")) {
+    if (S.state === "stopping") {
+        S.lastKill = NOW; removeKeepalive();
+        node.send([{ kill: "SIGKILL", payload: "" }, null, null, null, null]);
+    } else if (viewers() > 0 && (S.state === "unavailable" || S.state === "paused" || S.state === "idle")) {
         start(); widget();
     }
 } else if (t === "stdout") {
@@ -184,13 +220,17 @@ if (t === "lease") {
     lines.forEach(function (l) { l = l.trim(); if (l) { handleLine(l); } });
 } else if (t === "exit") {
     if (S.state === "stopping") {
-        finishStop(); widget();
+        S.reason = null; finishStop(); widget();
     } else if (S.state === "starting" || S.state === "live" || S.state === "grace") {
-        S.state = "unavailable"; S.reason = S.reason || "stream_ended"; S.detail = S.detail || null; widget();
+        S.state = "unavailable"; S.reason = S.reason || "stream_ended"; S.detail = S.detail || null;
+        removeKeepalive(); widget();
     }
 } else if (t === "tick") {
     S.tickPending = false;
     evaluate();
+    if (S.state === "starting" || S.state === "live" || S.state === "grace") {
+        if (!S.kaAt || NOW - S.kaAt >= 2000) { S.kaAt = NOW; refreshKeepalive(); }
+    }
 }
 scheduleTick();
 status();

@@ -54,7 +54,8 @@ class FlowTests(unittest.TestCase):
     def test_settings_are_documented_flow_environment_variables(self):
         tab = [n for n in load() if n["type"] == "tab"][0]
         names = {e["name"] for e in tab["env"]}
-        self.assertEqual(names, {"PW_DIR", "PW_CONFIG", "PW_LAUNCHER", "PW_ARGS", "PW_GRACE", "PW_LEASE", "PW_CAP"})
+        self.assertEqual(names, {"PW_DIR", "PW_CONFIG", "PW_LAUNCHER", "PW_ARGS", "PW_GRACE", "PW_LEASE", "PW_CAP",
+                                 "PW_KEEPALIVE", "PW_KA_TIMEOUT"})
         for name in names:
             self.assertIn(name, tab["info"])
 

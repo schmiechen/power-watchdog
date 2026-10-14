@@ -9,6 +9,10 @@
   any dashboard tab, and released shortly after. States: Live, Connecting, Unavailable (with Retry), Paused.
 - `docs/protocol.md`, `docs/coachproxy.md`, `docs/examples.md`, `install.sh`, `tools/build_flow.py`, `tests/`.
 
+- Keep-alive file stop mechanism (`--keepalive-file`) so the reader can be stopped even when it cannot be signalled (a reader
+  running as root through sudo, launched by a normal-user Node-RED). Found on a real Pi: signals were silently refused and the
+  Watchdog stayed connected after the "release".
+
 ### Fixed
 - The polling script stopped `bluetoothd` on every run, which left the adapter unable to make LE connections after a reboot
   (gatttool: "Function not implemented (38)"). It now leaves `bluetoothd` alone.

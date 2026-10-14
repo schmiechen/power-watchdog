@@ -74,7 +74,8 @@ Or pass the address on the command line: `python3 power_watchdog_stream.py AA:BB
 
 ```
 python3 power_watchdog_stream.py [MAC] [--config PATH] [--once] [--max-seconds N] [--interval S]
-                                 [--stop-on-stdin-eof] [--exit-with-parent] [-v]
+                                 [--stop-on-stdin-eof] [--exit-with-parent]
+                                 [--keepalive-file PATH [--keepalive-timeout S]] [-v]
 ```
 
 It prints one JSON object per line:
@@ -87,8 +88,9 @@ It prints one JSON object per line:
 
 - `line2` is absent on single-line units. `error_code` is `0` when healthy (codes are listed in [`docs/protocol.md`](docs/protocol.md)).
 - `reason` is one of `not_configured`, `adapter_not_ready`, `in_use_or_unreachable`, `no_data`.
-- **Stopping it frees the Watchdog.** Send `SIGTERM` or `SIGINT`, use `--max-seconds N` or `--once`, or run with
-  `--stop-on-stdin-eof` and close its input. It disconnects cleanly in all of these cases.
+- **Stopping it frees the Watchdog.** Send `SIGTERM` or `SIGINT`, use `--max-seconds N` or `--once`, run with
+  `--stop-on-stdin-eof` and close its input, or run with `--keepalive-file PATH` and delete that file (or stop changing its
+  content for `--keepalive-timeout` seconds). It disconnects cleanly in all of these cases.
 - Exit codes: `0` stopped normally, `2` no device address configured, `3` unavailable after retrying.
 - It makes at most two connection attempts, then gives up instead of retrying in a loop.
 
@@ -118,6 +120,14 @@ If the Watchdog is busy (for example the Hughes app is connected), the widget sa
 | `PW_GRACE` | `15` | seconds to wait after the last viewer leaves before disconnecting |
 | `PW_LEASE` | `15` | seconds a widget heartbeat stays valid (a vanished browser is released after this plus the grace) |
 | `PW_CAP` | `3600` | longest continuous session in seconds; then it pauses ("Resume" to continue), so a forgotten wall tablet cannot hold the Watchdog |
+| `PW_KEEPALIVE` | `/dev/shm/power-watchdog.keepalive` | small file the flow keeps refreshing while the reader should run; the reader stops by itself when it disappears (see below) |
+| `PW_KA_TIMEOUT` | `15` | seconds without a refresh before the reader stops by itself |
+
+**Why a keep-alive file?** The flow stops the reader with a signal, but a normal user may not signal a process owned by root.
+If the reader runs through `sudo` (`PW_LAUNCHER=sudo`), the signal is silently refused and the Watchdog would stay connected.
+So the flow also refreshes a small file while the reader should run and deletes it to stop it; the reader exits by itself when
+the file disappears or stops changing. This also frees the Watchdog if Node-RED itself dies. The file must be writable by the
+user Node-RED runs as and readable by the reader (the default in `/dev/shm` is fine on Linux).
 
 ## Troubleshooting
 

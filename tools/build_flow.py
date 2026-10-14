@@ -24,7 +24,9 @@ so the Hughes phone app can use the Watchdog.
 **Settings** (this flow tab's *Environment* variables): `PW_DIR` install folder of power_watchdog_stream.py,
 `PW_CONFIG` config file (optional), `PW_LAUNCHER` `sudo` if gatttool needs root (leave empty if you gave gatttool the
 needed capabilities), `PW_ARGS` extra reader options, `PW_GRACE` seconds before releasing (15), `PW_LEASE` seconds a
-widget heartbeat stays valid (15), `PW_CAP` longest continuous session in seconds (3600).
+widget heartbeat stays valid (15), `PW_CAP` longest continuous session in seconds (3600), `PW_KEEPALIVE` keep-alive file the reader watches
+(/dev/shm/power-watchdog.keepalive; must be writable by Node-RED and readable by the reader), `PW_KA_TIMEOUT` seconds
+without a refresh before the reader stops by itself (15).
 
 Requires: node-red-dashboard (classic), python3, gatttool (BlueZ), and `power_watchdog_stream.py` + `power_watchdog_ble.py`
 installed in `PW_DIR`. Unofficial; not affiliated with Hughes Autoformers. Read-only: nothing is written to the device
@@ -48,6 +50,8 @@ def build():
              {"name": "PW_GRACE", "value": "15", "type": "num"},
              {"name": "PW_LEASE", "value": "15", "type": "num"},
              {"name": "PW_CAP", "value": "3600", "type": "num"},
+             {"name": "PW_KEEPALIVE", "value": "/dev/shm/power-watchdog.keepalive", "type": "str"},
+             {"name": "PW_KA_TIMEOUT", "value": "15", "type": "num"},
          ]},
         {"id": "pwv_ui_tab", "type": "ui_tab", "name": "Power Watchdog", "icon": "dashboard",
          "disabled": False, "hidden": False},
@@ -58,9 +62,15 @@ def build():
          "fwdInMessages": False, "resendOnRefresh": True, "templateScope": "local", "className": "",
          "x": 150, "y": 100, "wires": [["pwv_ctrl"]]},
         {"id": "pwv_ctrl", "type": "function", "z": tab, "name": "Session controller", "func": read("controller.js"),
-         "outputs": 3, "noerr": 0, "initialize": read("controller_on_start.js"),
+         "outputs": 5, "noerr": 0, "initialize": read("controller_on_start.js"),
          "finalize": "", "libs": [],
-         "x": 400, "y": 100, "wires": [["pwv_exec"], ["pwv_widget"], ["pwv_tick"]]},
+         "x": 400, "y": 100, "wires": [["pwv_exec"], ["pwv_widget"], ["pwv_tick"], ["pwv_ka_write"], ["pwv_ka_delete"]]},
+        {"id": "pwv_ka_write", "type": "file", "z": tab, "name": "Keep-alive: refresh", "filename": "",
+         "appendNewline": False, "createDir": False, "overwriteFile": "true", "encoding": "none",
+         "x": 660, "y": 180, "wires": [[]]},
+        {"id": "pwv_ka_delete", "type": "file", "z": tab, "name": "Keep-alive: remove", "filename": "",
+         "appendNewline": False, "createDir": False, "overwriteFile": "delete", "encoding": "none",
+         "x": 660, "y": 220, "wires": [[]]},
         {"id": "pwv_tick", "type": "delay", "z": tab, "name": "1 s tick", "pauseType": "delay", "timeout": "1",
          "timeoutUnits": "seconds", "rate": "1", "nbRateUnits": "1", "rateUnits": "second", "randomFirst": "1",
          "randomLast": "5", "randomUnits": "seconds", "drop": False, "allowrate": False, "outputs": 1,

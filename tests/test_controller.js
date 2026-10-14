@@ -21,7 +21,7 @@ function harness(envVars) {
     const node = {
         id: "pwv_ctrl", name: "Session controller",
         send: (arr) => {
-            assert.ok(Array.isArray(arr) && arr.length === 3, "function node has exactly 3 outputs");
+            assert.ok(Array.isArray(arr) && arr.length === 5, "function node has exactly 5 outputs");
             if (arr[2]) { tickRequested = true; }
             sent.push(arr);
         },
@@ -48,6 +48,8 @@ function harness(envVars) {
         starts: () => sent.filter((s) => s[0] && s[0].payload && !s[0].kill).map((s) => s[0].payload),
         kills: () => sent.filter((s) => s[0] && s[0].kill).map((s) => s[0].kill),
         widgets: () => sent.filter((s) => s[1]).map((s) => s[1].payload),
+        writes: () => sent.filter((s) => s[3]).map((s) => s[3]),
+        deletes: () => sent.filter((s) => s[4]).map((s) => s[4]),
         lastWidget: () => { const w = h.widgets(); return w[w.length - 1]; },
         state: () => ctx.S.state
     };
@@ -72,7 +74,7 @@ test("the first viewer starts the reader with the expected command", () => {
     const h = harness({ PW_DIR: "/coachproxy", PW_LAUNCHER: "sudo", PW_CONFIG: "/etc/power_watchdog.conf" });
     h.lease("a");
     assert.strictEqual(h.starts().length, 1);
-    assert.strictEqual(h.starts()[0], "sudo python3 /coachproxy/power_watchdog_stream.py --exit-with-parent --stop-on-stdin-eof --config /etc/power_watchdog.conf");
+    assert.strictEqual(h.starts()[0], "sudo python3 /coachproxy/power_watchdog_stream.py --exit-with-parent --stop-on-stdin-eof --keepalive-file /dev/shm/power-watchdog.keepalive --keepalive-timeout 15 --config /etc/power_watchdog.conf");
     assert.strictEqual(h.state(), "starting");
     assert.strictEqual(h.lastWidget().state, "connecting");
 });
@@ -80,7 +82,7 @@ test("the first viewer starts the reader with the expected command", () => {
 test("default command has no launcher and the default install dir", () => {
     const h = harness();
     h.lease("a");
-    assert.strictEqual(h.starts()[0], "python3 /opt/power-watchdog/power_watchdog_stream.py --exit-with-parent --stop-on-stdin-eof");
+    assert.strictEqual(h.starts()[0], "python3 /opt/power-watchdog/power_watchdog_stream.py --exit-with-parent --stop-on-stdin-eof --keepalive-file /dev/shm/power-watchdog.keepalive --keepalive-timeout 15");
 });
 
 test("live readings are forwarded to the widget", () => {
@@ -261,19 +263,62 @@ test("a session is paused after the cap, then resumes on Retry", () => {
     assert.strictEqual(h.starts().length, 2);
 });
 
-test("if the reader ignores SIGTERM it is escalated to SIGKILL and the controller still recovers", () => {
+test("a reader that cannot be signalled is never reported as released until it really exits (the failure seen on the Pi)", () => {
     const h = harness();
     h.lease("a");
     h.out(LIVE);
     h.lease("a", false);
-    h.advance(16);
+    h.advance(16);                                   // grace over: stop requested
     assert.deepStrictEqual(h.kills(), ["SIGTERM"]);
+    assert.ok(h.deletes().length >= 1, "the keep-alive file is removed so a reader that ignores signals still stops");
     h.advance(6);
-    assert.deepStrictEqual(h.kills(), ["SIGTERM", "SIGKILL"]);
-    h.advance(4);   // no exit message ever arrives
-    assert.strictEqual(h.state(), "idle");
-    h.advance(3);
-    assert.strictEqual(h.tickRequested(), false);
+    assert.ok(h.kills().indexOf("SIGKILL") >= 0, "escalates to SIGKILL");
+    h.advance(40);                                   // no exit message ever arrives
+    assert.strictEqual(h.state(), "stopping", "must not pretend the reader is gone");
+    assert.strictEqual(h.lastWidget().state, "unavailable");
+    assert.strictEqual(h.lastWidget().reason, "stop_failed");
+    assert.ok(h.kills().filter((k) => k === "SIGKILL").length >= 3, "keeps trying");
+    h.lease("b", true);                              // a new viewer must not start a second reader meanwhile
+    assert.strictEqual(h.starts().length, 1);
+    h.exit(0);                                       // it finally exits
+    assert.strictEqual(h.starts().length, 2, "then the waiting viewer gets a fresh reader");
+});
+
+test("the keep-alive file is refreshed with changing content while a session exists, and removed on stop", () => {
+    const h = harness();
+    h.lease("a");
+    assert.strictEqual(h.writes().length, 1, "written before the reader starts");
+    assert.strictEqual(h.writes()[0].filename, "/dev/shm/power-watchdog.keepalive");
+    h.out(LIVE);
+    h.advance(10, ["a"]);
+    const w = h.writes();
+    assert.ok(w.length >= 5, "refreshed about every 2 s, got " + w.length);
+    assert.strictEqual(new Set(w.map((m) => m.payload)).size, w.length, "content changes every time");
+    h.lease("a", false);
+    h.advance(10);
+    assert.ok(h.writes().length > w.length, "still refreshed during the grace period");
+    h.advance(10);                                   // grace over -> stop
+    assert.ok(h.deletes().length >= 1);
+    const n = h.writes().length;
+    h.exit(0);
+    h.advance(10);
+    assert.strictEqual(h.writes().length, n, "no more refreshes after the reader is gone");
+});
+
+test("PW_KEEPALIVE chooses the file", () => {
+    const h = harness({ PW_KEEPALIVE: "/tmp/x.ka" });
+    h.lease("a");
+    assert.strictEqual(h.writes()[0].filename, "/tmp/x.ka");
+    assert.ok(/--keepalive-file \/tmp\/x\.ka/.test(h.starts()[0]));
+});
+
+test("Retry while a stop is stuck re-sends the stop", () => {
+    const h = harness();
+    h.lease("a"); h.out(LIVE); h.lease("a", false); h.advance(16);
+    const kills = h.kills().length;
+    h.lease("a", true);
+    h.retry();
+    assert.ok(h.kills().length > kills);
 });
 
 test("a viewer arriving while the reader is shutting down gets a fresh start afterwards", () => {
