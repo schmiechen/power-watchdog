@@ -16,21 +16,33 @@ Watchdog as usual.
 
 ## Install on CoachProxy (about 5 minutes)
 
-**You need:** the Watchdog plugged into shore power, your CoachProxy on your Wi-Fi, and a laptop or desktop on the same Wi-Fi.
-Close the Hughes app on every phone and tablet first (see [The Hughes app and the dashboard take turns](#the-hughes-app-and-the-dashboard-take-turns)).
+**You need:**
+- A Hughes Power Watchdog (the Bluetooth model, "Gen I"; the Wi-Fi model is not supported) that is plugged in and switched on.
+- Your CoachProxy running on your Wi-Fi, and a laptop or desktop on the same Wi-Fi.
+- To be within about 30 feet of the Watchdog, with the CoachProxy near it as it normally is. The Watchdog is found over Bluetooth
+  by the CoachProxy itself, not by your laptop.
+- The password for your CoachProxy (see Step 1). Whoever installed it for you will know it.
+- The Hughes app **closed** on every phone and tablet first: swipe it away so it is not running in the background (see
+  [The Hughes app and the dashboard take turns](#the-hughes-app-and-the-dashboard-take-turns)).
 
 ### Step 1. Open a terminal on your CoachProxy
 
 1. On your CoachProxy dashboard open **System** and look at **Network Information**: write down the **IP Address**
    (something like `192.168.1.50`).
-2. On a Mac open the **Terminal** app; on Windows open **PowerShell**. Type this, using your own address, and press Enter:
+2. Open a **terminal**, which is a window where you type commands:
+   - **Mac:** press Cmd + Space, type `Terminal`, press Enter.
+   - **Windows:** press the Windows key, type `PowerShell`, press Enter.
+3. Type this, using your own address, and press Enter:
 
    ```
    ssh pi@192.168.1.50
    ```
 
-3. Enter the password for your CoachProxy's `pi` user when asked. If you do not know it, the CoachProxy owners' community
-   (the "CoachProxy" Facebook group) is the place to ask; this project cannot recover it for you.
+4. The first time, it asks *"Are you sure you want to continue connecting?"* That is normal: type `yes` and press Enter.
+5. It asks for a **password**: the password for your CoachProxy's `pi` user, which is whatever was chosen when your CoachProxy was
+   set up (ask whoever installed it; this project cannot look it up or reset it, and the "CoachProxy" Facebook group is the place
+   to ask if nobody knows). **When you type it, nothing appears on the screen, not even dots. That is normal.** Type it and press Enter.
+6. You are in when the line you see starts with `pi@` and ends with a `$`.
 
 ### Step 2. Paste one command
 
@@ -38,8 +50,12 @@ Close the Hughes app on every phone and tablet first (see [The Hughes app and th
 curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash
 ```
 
+To paste: **Mac** Cmd + V; **Windows** right-click in the window. Then press Enter.
+
 It checks your CoachProxy, finds your Watchdog over Bluetooth, takes one test reading, saves a backup of your dashboard
-settings, and adds the widget to your **Status** tab. It explains each step in plain words as it goes and takes about a minute.
+settings, and adds the widget to your **Status** tab. It explains each step in plain words as it goes ("Step 1 of 5" and so on)
+and takes about a minute. **It worked if you see `All done.`** If you see `Stopped:` instead, read the
+sentence after it, which says what to fix, and run the same command again (it is safe to repeat).
 
 **Want to look first?** Download the installer, read it, then run it:
 
@@ -52,12 +68,14 @@ bash get.sh
 Add `--dry-run` to either version to see what *would* happen without changing anything
 (`bash get.sh --dry-run`, or `... | bash -s -- --dry-run`).
 
-If there is more than one Watchdog in range (a campground), type the **code printed on the label of your Watchdog** (it looks
-like `APMDB7C41E9F2`) when it asks, so it picks yours: `bash get.sh --code APMDB7C41E9F2`.
+If it says it found **more than one** Watchdog (neighbors in a campground), it needs the **code printed on the label of your
+Watchdog**; it looks like `APMDB7C41E9F2`. Run it again with your code: `bash get.sh --code APMDB7C41E9F2` (the download-first
+version above) or `curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash -s -- --code APMDB7C41E9F2`.
 
 ### Step 3. Look at your dashboard
 
-Open the **Status** tab and find the **Watchdog** panel. Within a few seconds it should show **Live** and your numbers.
+Open your CoachProxy dashboard in your browser as usual and go to the **Status** tab. Find the **Watchdog** panel (if you cannot
+see it, refresh the page). Within a few seconds it should show **Live** and your numbers.
 
 ## What you will see on the dashboard
 
@@ -78,7 +96,7 @@ On an iPhone or iPad, the Bluetooth button in Control Center does **not** fully 
 
 ## If something does not work
 
-**The installer says it cannot find the Watchdog.** Check it has shore power, close the Hughes app on every phone and tablet,
+**The installer says it cannot find the Watchdog.** Check it is plugged in and switched on, close the Hughes app on every phone and tablet,
 and run the installer again. If you know the Watchdog's Bluetooth address you can give it directly:
 `bash get.sh --mac AA:BB:CC:DD:EE:FF`.
 
