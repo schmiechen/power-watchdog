@@ -20,5 +20,11 @@
   (gatttool: "Function not implemented (38)"). It now leaves `bluetoothd` alone.
 - README: the command characteristic is `FFF5` (there is no `FFE1`), real Python requirement (3.7+), real behavior.
 
+- Widget: the 5 s lease heartbeat was echoed back by classic node-red-dashboard 2.x ("store output messages" was on) and
+  replaced the readings with the heartbeat, so the panel blanked and said "Connecting..." every 5 s. The setting is now off.
+  Found on a real dashboard; the 3.x dashboard used for the sandbox does not do this.
+- Controller: the keep-alive file is now also removed when the reader reports `unavailable` and exits (a stale file was left).
+- Widget: stale readings are shown dim red instead of dim green, so they cannot be mistaken for live ones.
+
 ### Changed
 - No more fixed-interval background polling in the Node-RED flow. The old inject-based flow is gone from this repository.

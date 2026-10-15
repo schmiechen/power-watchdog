@@ -32,7 +32,7 @@ the widget is on screen and lets go a few seconds after you leave); with the rea
 | Reader (`power_watchdog_stream.py`) on a Raspberry Pi Zero W (Raspbian 10 "Buster", BlueZ 5.50, Python 3.7) with a real Gen I 50 A unit | **Verified**: live readings, clean disconnect (the unit advertises again about 2 s later), stops cleanly on SIGTERM |
 | Reader unit tests (`python3 -m unittest discover -s tests`) | 20+ tests, pass on macOS and on the Pi; they replay 620 real recorded packets through a fake `gatttool` |
 | Node-RED flow, server side (start/stop, grace period, shared viewers, unavailable handling, no orphan after a hard kill of Node-RED) | **Verified** in a fresh Node-RED 5.0.8 + node-red-dashboard 3.6.6; controller logic has its own tests (`node tests/test_controller.js`) |
-| Widget behavior in real browsers (tab switch, page hidden, page closed, phone lock) | **Pending** |
+| Widget behavior in real browsers on a real Pi (Node-RED 2.2.2, node-red-dashboard 2.19.2; desktop Chrome and a phone browser): open, tab switch, two viewers, phone lock, all pages closed, Hughes app holding the unit then released + Retry | **Verified** (one session; a 48 h soak is still pending) |
 | Gen I 30 A (single line) | Expected to work (the widget hides the missing second line); **untested** |
 | Home Assistant and other platforms | Examples only, **untested** |
 | Not supported | Gen II / Wi-Fi Power Watchdogs; FlowFuse "Dashboard 2.0" (a different widget system); systems without `gatttool` |

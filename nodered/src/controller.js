@@ -230,6 +230,8 @@ if (t === "lease") {
     } else if (S.state === "starting" || S.state === "live" || S.state === "grace") {
         S.state = "unavailable"; S.reason = S.reason || "stream_ended"; S.detail = S.detail || null;
         removeKeepalive(); widget();
+    } else if (S.state === "unavailable") {
+        removeKeepalive();   // the reader reported "unavailable" itself and has now exited; leave no stale file behind
     }
 } else if (t === "tick") {
     S.tickPending = false;

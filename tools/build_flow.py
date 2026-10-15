@@ -58,7 +58,7 @@ def build():
         {"id": "pwv_ui_group", "type": "ui_group", "name": "Power Watchdog", "tab": "pwv_ui_tab",
          "order": 1, "disp": False, "width": "6", "collapse": False},
         {"id": "pwv_widget", "type": "ui_template", "z": tab, "group": "pwv_ui_group", "name": "Watchdog Display",
-         "order": 1, "width": "6", "height": "9", "format": read("widget.html"), "storeOutMessages": True,
+         "order": 1, "width": "6", "height": "9", "format": read("widget.html"), "storeOutMessages": False,
          "fwdInMessages": False, "resendOnRefresh": True, "templateScope": "local", "className": "",
          "x": 150, "y": 100, "wires": [["pwv_ctrl"]]},
         {"id": "pwv_ctrl", "type": "function", "z": tab, "name": "Session controller", "func": read("controller.js"),

@@ -200,6 +200,18 @@ test("unavailable is reported once, with a plain-language message, and is not re
     assert.strictEqual(h.starts().length, 1, "must not retry on its own");
 });
 
+test("the keep-alive file is removed when the reader reports unavailable and exits (stale file seen on the Pi)", () => {
+    const h = harness();
+    h.lease("a");
+    h.send({ topic: "stdout", payload: JSON.stringify({ state: "unavailable", reason: "in_use_or_unreachable" }) + "\n" });
+    assert.strictEqual(h.deletes().length, 0, "not before the reader has exited");
+    h.exit(3);
+    assert.strictEqual(h.deletes().length, 1);
+    h.advance(10, ["a"]);
+    assert.strictEqual(h.deletes().length, 1, "removed once, not repeatedly");
+    assert.strictEqual(h.writes().length, 1, "and not refreshed again while unavailable");
+});
+
 test("last good reading stays on screen, dimmed, when unavailable", () => {
     const h = harness();
     h.lease("a");

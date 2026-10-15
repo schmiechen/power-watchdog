@@ -65,6 +65,12 @@ class FlowTests(unittest.TestCase):
         self.assertTrue(w["resendOnRefresh"])
         self.assertEqual(w["wires"], [["pwv_ctrl"]])
 
+    def test_widget_heartbeats_are_not_stored_as_widget_state(self):
+        # classic node-red-dashboard 2.x echoes every scope.send() back to all browsers as the widget's new data when
+        # storeOutMessages is on; the 5 s heartbeat then blanked the readings (seen on a real dashboard)
+        w = [n for n in load() if n["type"] == "ui_template"][0]
+        self.assertFalse(w["storeOutMessages"])
+
     def test_widget_reports_when_it_is_on_screen(self):
         fmt = [n for n in load() if n["type"] == "ui_template"][0]["format"]
         for needle in ("visibilitychange", "pagehide", "$destroy", "getClientRects", "topic: 'lease'", "topic: 'retry'"):
