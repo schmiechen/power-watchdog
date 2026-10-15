@@ -75,9 +75,12 @@ second packet continues it. Concatenate them (40 bytes):
 ### Error code byte
 
 The vendor app shows the byte as the code printed on the unit: a value below 10 becomes `E<n>`, a value of 10 or more becomes
-`F<n-10>` (`Util.getErrorCodeString`), so byte 7 is shown as E7 and byte 11 as F1 **(from app code)**. The *meanings* in the table
-below are from the Hughes manual as noted when this table was written; they were not re-checked against the manual, and no
-fault has ever been seen on a real unit (every recorded reading is code 0), so treat them as unconfirmed on the air.
+`F<n-10>` (`Util.getErrorCodeString`), so byte 7 is shown as E7 and byte 11 as F1 **(from app code)**. The meanings of **E1 to
+E9 match the Hughes manual's error-code page** (checked against the manual). The F1/F2 rows were not on that page and are
+unconfirmed. No fault has ever been seen on a real unit (every recorded reading is code 0), so the byte position itself is
+confirmed only by the app's code, not on the air. Per the manual, once the cause is fixed the Watchdog turns power back on by itself after about 90 seconds for E1, E2, E5
+and E7 (and for E8 once the neutral circuit is restored); E6 needs the unit unplugged and replugged; E9 is only a warning (power
+stays on).
 
 | Code | Meaning (shown on the unit as) |
 |---|---|
