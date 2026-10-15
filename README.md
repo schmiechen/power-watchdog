@@ -1,4 +1,4 @@
-# Hughes Power Watchdog on your RV dashboard
+# Hughes Power Watchdog on your RV CoachProxy Dashboard
 
 Reverse-engineered Bluetooth protocol and a live dashboard widget for the Hughes Autoformers Power Watchdog RV surge protector (Gen I). Enables integration with CoachProxy, Node-RED, Home Assistant, and other platforms without the proprietary app.
 
@@ -23,10 +23,6 @@ to it, and the Hughes app **closed** (swiped away) on every phone and tablet
 ### Step 1. SSH into your CoachProxy
 
 From a computer on the same Wi-Fi (the IP address is on your dashboard under **System > Network Information**):
-
-```
-ssh pi@192.168.1.50
-```
 
 ### Step 2. Paste one command
 
