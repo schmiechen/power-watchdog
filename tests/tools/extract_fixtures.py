@@ -4,14 +4,16 @@ Reads a capture of the Hughes app talking to a Power Watchdog, keeps ONLY the 20
 Watchdog's connection (handle 0x0020 = FFE2 value), and writes them as JSON test fixtures. Nothing else from the
 capture (other devices, names, addresses) is kept.
 
-Usage: python3 -I tests/tools/extract_fixtures.py capture.pklg tests/fixtures/notifications.json [PEER-MAC]
+Usage: python3 -I tests/tools/extract_fixtures.py capture.pklg tests/fixtures/notifications.json WATCHDOG-ADDRESS
 """
 import json
 import struct
 import sys
 
 path, out = sys.argv[1], sys.argv[2]
-peer = (sys.argv[3] if len(sys.argv) > 3 else "F0:F8:F2:FA:24:03").upper()
+if len(sys.argv) < 4:
+    sys.exit("usage: extract_fixtures.py CAPTURE.pklg OUT.json WATCHDOG_ADDRESS")
+peer = sys.argv[3].upper()
 peer_le = bytes(int(x, 16) for x in peer.split(":"))[::-1]
 data = open(path, "rb").read()
 

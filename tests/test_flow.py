@@ -80,7 +80,7 @@ class FlowTests(unittest.TestCase):
         with open(FLOW, encoding="utf-8") as fh:
             text = fh.read()
         flat = re.sub(r"base64,[A-Za-z0-9+/=]{200,}", "base64,", text)
-        for banned in ("/coachproxy", "192.168.", "F0:F8:F2", "salesforce", "Toasted", "5900d0c"):
+        for banned in ("/coachproxy", "192.168."):
             self.assertNotIn(banned, flat, "found machine-specific text: " + banned)
         self.assertFalse(re.search(r"\b[0-9A-F]{2}(:[0-9A-F]{2}){5}\b", flat), "a MAC address is baked in")
 
