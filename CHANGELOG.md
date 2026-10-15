@@ -3,6 +3,12 @@
 ## Unreleased (branch viewer-driven-integration)
 
 ### Added
+- One-command installer for CoachProxy owners (`get.sh` -> `install_coachproxy.py`): checks the machine, copies the files, finds
+  the Watchdog over Bluetooth in short scans (the label code picks yours when several are in range), takes a test reading,
+  saves a backup of the Node-RED flows and adds the widget to the Status tab. Idempotent (re-run = upgrade), `--dry-run`,
+  `--uninstall`. It only ever adds or replaces its own `pwv_` pieces and switches the first release's polling nodes off.
+- Error codes now show the way the unit and the Hughes app do, with the manual's meaning for E1 to E9 (for example `Error E7: Missing ground`).
+- README rewritten for non-developers: plain-language install first, developer material below.
 - `power_watchdog_stream.py`: on-demand live reader (JSON lines, clean stop on SIGTERM / `--max-seconds` / `--once` / stdin EOF),
   with unit tests that replay real recorded packets.
 - Node-RED flow rebuilt around a viewer-driven widget: the Bluetooth connection is held only while the widget is on screen, on

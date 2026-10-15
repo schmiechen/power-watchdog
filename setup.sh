@@ -1,5 +1,6 @@
 #!/bin/bash
 # setup.sh - Discover Power Watchdog BLE device and write config
+# (install_coachproxy.py does this and more, with shorter Bluetooth scans; this script is the manual alternative.)
 #
 # Usage: sudo ./setup.sh [config_path]
 # Default config path: /etc/power_watchdog.conf
@@ -94,7 +95,7 @@ if echo "$TEST_OUTPUT" | grep -q "Notification handle"; then
 else
     echo "Warning: Connected but no data received. The device may need a moment."
     echo "Config will be written anyway - you can test with:"
-    echo "  sudo python3 power_watchdog_ble.py"
+    echo "  sudo python3 power_watchdog_stream.py --once"
 fi
 
 echo ""
@@ -112,4 +113,4 @@ echo ""
 cat "$CONFIG_PATH"
 echo ""
 echo "Setup complete! Test with:"
-echo "  sudo python3 power_watchdog_ble.py"
+echo "  sudo python3 power_watchdog_stream.py --once"

@@ -71,6 +71,22 @@ class FlowTests(unittest.TestCase):
         w = [n for n in load() if n["type"] == "ui_template"][0]
         self.assertFalse(w["storeOutMessages"])
 
+    def test_widget_shows_error_codes_the_way_the_unit_and_the_app_do_with_the_manual_meanings(self):
+        # codes: app code (Util.getErrorCodeString). E1-E9 meanings: Hughes manual. F-codes: bare (not in the manual page checked)
+        w = [n for n in load() if n["type"] == "ui_template"][0]["format"]
+        m = re.search(r"var PW_ERRORS = \{.*?\};\s*scope\.pwErrorText = function.*?\n    \};", w, re.S)
+        self.assertTrue(m, "error helper not found in the widget")
+        js = "var scope = {};\n" + m.group(0) + "\nconsole.log(JSON.stringify([0,1,2,3,4,5,6,7,8,9,10,11,12].map(scope.pwErrorText)));"
+        if not shutil.which("node"):
+            self.skipTest("node is not installed")
+        out = subprocess.run(["node", "-e", js], stdout=subprocess.PIPE, universal_newlines=True, check=True).stdout
+        got = json.loads(out)
+        self.assertEqual(got[1:10], ["Error E1: Line 1 voltage", "Error E2: Line 2 voltage", "Error E3: Line 1 overcurrent",
+                                     "Error E4: Line 2 overcurrent", "Error E5: Line 1 neutral reversed",
+                                     "Error E6: Line 2 neutral reversed", "Error E7: Missing ground",
+                                     "Error E8: Neutral missing", "Error E9: Surge protection used up"])
+        self.assertEqual(got[10:], ["Error F0", "Error F1", "Error F2"])
+
     def test_widget_reports_when_it_is_on_screen(self):
         fmt = [n for n in load() if n["type"] == "ui_template"][0]["format"]
         for needle in ("visibilitychange", "pagehide", "$destroy", "getClientRects", "topic: 'lease'", "topic: 'retry'"):

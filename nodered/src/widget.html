@@ -202,7 +202,7 @@
     </div>
     <div class="pw-footer">
         <span class="pw-timestamp" ng-if="msg.payload.timestamp">as of {{msg.payload.timestamp * 1000 | date:'h:mm:ss a'}}</span>
-        <span class="pw-error" ng-if="msg.payload.error_code > 0">Error: {{msg.payload.error_code}}</span>
+        <span class="pw-error" ng-if="msg.payload.error_code > 0">{{pwErrorText(msg.payload.error_code)}}</span>
     </div>
     <div class="pw-status">
         <span class="pw-dot" ng-class="msg.payload.state || 'connecting'"></span>
@@ -217,6 +217,16 @@
 </div>
 <script>
 (function (scope) {
+    // Error codes as shown on the unit and in the Hughes app: byte < 10 -> E<n>, byte >= 10 -> F<n-10>. The E1-E9 meanings
+    // are from the Hughes manual; F-codes (frequency errors, bytes 11 and 12) are not in the manual page we checked, so they
+    // are shown as the bare code.
+    var PW_ERRORS = {"1": "Line 1 voltage", "2": "Line 2 voltage", "3": "Line 1 overcurrent", "4": "Line 2 overcurrent",
+                     "5": "Line 1 neutral reversed", "6": "Line 2 neutral reversed", "7": "Missing ground",
+                     "8": "Neutral missing", "9": "Surge protection used up"};
+    scope.pwErrorText = function (c) {
+        var code = c >= 10 ? 'F' + (c - 10) : 'E' + c;
+        return 'Error ' + code + (PW_ERRORS[c] ? ': ' + PW_ERRORS[c] : '');
+    };
     if (scope.pwLeaseStarted) { return; }
     scope.pwLeaseStarted = true;
     var id = 'pw-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
