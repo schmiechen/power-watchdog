@@ -16,41 +16,23 @@ Watchdog as usual.
 
 ## Install on CoachProxy (about 5 minutes)
 
-**You need:**
-- A Hughes Power Watchdog (the Bluetooth model, "Gen I"; the Wi-Fi model is not supported) that is plugged in and switched on.
-- Your CoachProxy running on your Wi-Fi, and a laptop or desktop on the same Wi-Fi.
-- To be within about 30 feet of the Watchdog, with the CoachProxy near it as it normally is. The Watchdog is found over Bluetooth
-  by the CoachProxy itself, not by your laptop.
-- The password for your CoachProxy (see Step 1). Whoever installed it for you will know it.
-- The Hughes app **closed** on every phone and tablet first: swipe it away so it is not running in the background (see
-  [The Hughes app and the dashboard take turns](#the-hughes-app-and-the-dashboard-take-turns)).
+**You need:** a Hughes Power Watchdog (the Bluetooth "Gen I" model) that is plugged in, a CoachProxy on your Wi-Fi, SSH access
+to it, and the Hughes app **closed** (swiped away) on every phone and tablet
+(see [The Hughes app and the dashboard take turns](#the-hughes-app-and-the-dashboard-take-turns)).
 
-### Step 1. Open a terminal on your CoachProxy
+### Step 1. SSH into your CoachProxy
 
-1. On your CoachProxy dashboard open **System** and look at **Network Information**: write down the **IP Address**
-   (something like `192.168.1.50`).
-2. Open a **terminal**, which is a window where you type commands:
-   - **Mac:** press Cmd + Space, type `Terminal`, press Enter.
-   - **Windows:** press the Windows key, type `PowerShell`, press Enter.
-3. Type this, using your own address, and press Enter:
+From a computer on the same Wi-Fi (the IP address is on your dashboard under **System > Network Information**):
 
-   ```
-   ssh pi@192.168.1.50
-   ```
-
-4. The first time, it asks *"Are you sure you want to continue connecting?"* That is normal: type `yes` and press Enter.
-5. It asks for a **password**: the password for your CoachProxy's `pi` user, which is whatever was chosen when your CoachProxy was
-   set up (ask whoever installed it; this project cannot look it up or reset it, and the "CoachProxy" Facebook group is the place
-   to ask if nobody knows). **When you type it, nothing appears on the screen, not even dots. That is normal.** Type it and press Enter.
-6. You are in when the line you see starts with `pi@` and ends with a `$`.
+```
+ssh pi@192.168.1.50
+```
 
 ### Step 2. Paste one command
 
 ```
 curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash
 ```
-
-To paste: **Mac** Cmd + V; **Windows** right-click in the window. Then press Enter.
 
 It checks your CoachProxy, finds your Watchdog over Bluetooth, takes one test reading, saves a backup of your dashboard
 settings, and adds the widget to your **Status** tab. It explains each step in plain words as it goes ("Step 1 of 5" and so on)
