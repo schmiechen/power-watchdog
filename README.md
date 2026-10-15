@@ -22,7 +22,7 @@ to it, and the Hughes app **closed** (swiped away) on every phone and tablet
 
 ### Step 1. SSH into your CoachProxy
 
-From a computer on the same Wi-Fi (the IP address is on your dashboard under **System > Network Information**):
+From a computer on the same Wi-Fi (the IP address is on your dashboard under **System > Network Information**).
 
 ### Step 2. Paste one command
 
