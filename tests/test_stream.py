@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -85,6 +86,15 @@ class StreamTests(unittest.TestCase):
         self.assertTrue(59 < r["line1"]["frequency"] < 61)
         self.assertEqual(r["error_code"], 0)
         self.assertAlmostEqual(r["total_energy_kwh"], round(r["line1"]["energy_kwh"] + r["line2"]["energy_kwh"], 1), 1)
+
+    def test_a_fault_code_reported_by_either_line_reaches_the_output(self):
+        # No real unit has ever shown a fault while recording, so this only proves our pass-through (the byte-19 position and
+        # the code meanings come from the vendor app, not from an observed fault).
+        code, lines, _ = run(["--once"], env_extra={"PW_FAKE_ERROR": "7"})
+        self.assertEqual(code, 0)
+        live = [x for x in lines if x["state"] == "live"][0]
+        self.assertEqual(live["error_code"], 7)
+        self.assertTrue(100 < live["line1"]["voltage"] < 140, "the readings themselves are unchanged")
 
     def test_every_output_line_is_json_with_a_state(self):
         code, lines, _ = run(["--max-seconds", "3"])
