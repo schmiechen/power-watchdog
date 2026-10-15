@@ -71,6 +71,11 @@ class FlowTests(unittest.TestCase):
         w = [n for n in load() if n["type"] == "ui_template"][0]
         self.assertFalse(w["storeOutMessages"])
 
+    def test_widget_shows_the_error_code_the_way_the_unit_and_the_app_do(self):
+        # app code (Util.getErrorCodeString): byte < 10 -> "E<n>", byte >= 10 -> "F<n-10>"
+        w = [n for n in load() if n["type"] == "ui_template"][0]["format"]
+        self.assertIn("error_code >= 10 ? 'F' + (msg.payload.error_code - 10) : 'E' + msg.payload.error_code", w)
+
     def test_widget_reports_when_it_is_on_screen(self):
         fmt = [n for n in load() if n["type"] == "ui_template"][0]["format"]
         for needle in ("visibilitychange", "pagehide", "$destroy", "getClientRects", "topic: 'lease'", "topic: 'retry'"):

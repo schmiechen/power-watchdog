@@ -202,7 +202,7 @@
     </div>
     <div class="pw-footer">
         <span class="pw-timestamp" ng-if="msg.payload.timestamp">as of {{msg.payload.timestamp * 1000 | date:'h:mm:ss a'}}</span>
-        <span class="pw-error" ng-if="msg.payload.error_code > 0">Error: {{msg.payload.error_code}}</span>
+        <span class="pw-error" ng-if="msg.payload.error_code > 0">Error {{msg.payload.error_code >= 10 ? 'F' + (msg.payload.error_code - 10) : 'E' + msg.payload.error_code}}</span>
     </div>
     <div class="pw-status">
         <span class="pw-dot" ng-class="msg.payload.state || 'connecting'"></span>
