@@ -6,8 +6,8 @@ check it or do the same by hand.
 
 **Verified on CoachProxyOS** (Raspberry Pi Zero W, Raspbian 10 "Buster", BlueZ 5.50, Python 3.7.3, Node-RED 2.2.2,
 node-red-dashboard 2.19.2): the live reader connects, streams and disconnects cleanly, and the dashboard widget works in
-desktop and phone browsers. The one-command installer has been tested against a throwaway Node-RED 2.2.2 with simulated
-Bluetooth; a run on a real CoachProxy is still pending.
+desktop and phone browsers. The one-command installer was also run on a real CoachProxyOS Pi: a dry run, an uninstall, and
+a fresh install (real Bluetooth scan, test reading, widget) with all of CoachProxy's own dashboard nodes left untouched.
 
 ## What the installer does
 
