@@ -1,8 +1,8 @@
 #!/bin/bash
 # get.sh - download the Power Watchdog project and run its installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash -s -- --dry-run
+#   curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog-coachproxy/main/get.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog-coachproxy/main/get.sh | bash -s -- --dry-run
 #
 # What it does: downloads the project as one archive into a new temporary folder, then runs install_coachproxy.py with
 # sudo. Nothing else. Read install_coachproxy.py first if you like (it is in the same project). Options after "--" are
@@ -12,7 +12,7 @@
 
 set -e
 
-ARCHIVE="${POWER_WATCHDOG_ARCHIVE:-https://github.com/schmiechen/power-watchdog/archive/refs/heads/main.tar.gz}"
+ARCHIVE="${POWER_WATCHDOG_ARCHIVE:-https://github.com/schmiechen/power-watchdog-coachproxy/archive/refs/heads/main.tar.gz}"
 
 say() { printf '%s\n' "$*"; }
 

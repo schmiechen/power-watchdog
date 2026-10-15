@@ -27,7 +27,7 @@ From a computer on the same Wi-Fi (the IP address is on your dashboard under **S
 ### Step 2. Paste one command
 
 ```
-curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog-coachproxy/main/get.sh | bash
 ```
 
 It checks your CoachProxy, finds your Watchdog over Bluetooth, takes one test reading, saves a backup of your dashboard
@@ -38,7 +38,7 @@ sentence after it, which says what to fix, and run the same command again (it is
 **Want to look first?** Download the installer, read it, then run it:
 
 ```
-curl -fsSLO https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh
+curl -fsSLO https://raw.githubusercontent.com/schmiechen/power-watchdog-coachproxy/main/get.sh
 less get.sh        # read it; press q to quit
 bash get.sh
 ```
@@ -48,7 +48,7 @@ Add `--dry-run` to either version to see what *would* happen without changing an
 
 If it says it found **more than one** Watchdog (neighbors in a campground), it needs the **code printed on the label of your
 Watchdog**; it looks like `APMDB7C41E9F2`. Run it again with your code: `bash get.sh --code APMDB7C41E9F2` (the download-first
-version above) or `curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash -s -- --code APMDB7C41E9F2`.
+version above) or `curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog-coachproxy/main/get.sh | bash -s -- --code APMDB7C41E9F2`.
 
 ### Step 3. Look at your dashboard
 
@@ -87,12 +87,12 @@ the label code has been confirmed on one unit only.
 
 **The installer says it could not use Node-RED.** It prints three short manual steps to follow instead.
 
-**Anything else:** [open an issue](https://github.com/schmiechen/power-watchdog/issues) and include what the installer printed.
+**Anything else:** [open an issue](https://github.com/schmiechen/power-watchdog-coachproxy/issues) and include what the installer printed.
 
 ## Update, remove, or reinstall
 
 - **Update** to a newer version: run the same install command again. It is safe to repeat, and it only touches its own pieces.
-- **Remove:** run the install command with `--uninstall` added: `curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog/main/get.sh | bash -s -- --uninstall`.
+- **Remove:** run the install command with `--uninstall` added: `curl -fsSL https://raw.githubusercontent.com/schmiechen/power-watchdog-coachproxy/main/get.sh | bash -s -- --uninstall`.
 - **If you re-flash your CoachProxy's SD card** the widget goes with it. Run the installer again.
 - **Your backups** (a copy of your dashboard settings from before each change) are in `/coachproxy/backups/`.
 - **If you used the first version of this project** (the one that polled every 15 seconds), the installer switches its old
@@ -141,8 +141,8 @@ The installer works on any such machine, not just CoachProxy: `sudo python3 inst
 (use `--tab "Your Tab Name"` to choose the dashboard tab; `--help` lists the options). To do it entirely by hand:
 
 ```bash
-git clone https://github.com/schmiechen/power-watchdog.git
-cd power-watchdog
+git clone https://github.com/schmiechen/power-watchdog-coachproxy.git
+cd power-watchdog-coachproxy
 sudo ./install.sh              # copies the two Python files to /opt/power-watchdog (see --help)
 sudo ./setup.sh                # finds your Watchdog and writes /etc/power_watchdog.conf
 sudo python3 /opt/power-watchdog/power_watchdog_stream.py --once
