@@ -80,6 +80,11 @@ if scenario == "slow_connect":
     time.sleep(30)
     sys.exit(0)
 
+if "--characteristics" in sys.argv:   # what the installer asks for to find the notification handle
+    say("handle = 0x001c, char properties = 0x0e, char value handle = 0x001d, uuid = 0000fff5-0000-1000-8000-00805f9b34fb")
+    say("handle = 0x001f, char properties = 0x12, char value handle = 0x0020, uuid = 0000ffe2-0000-1000-8000-00805f9b34fb")
+    sys.exit(0)
+
 time.sleep(0.2)
 say("Characteristic value was written successfully")
 if scenario == "no_data":

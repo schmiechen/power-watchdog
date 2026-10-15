@@ -18,7 +18,7 @@ and was not independently confirmed on the air.
 
 | Property | Value |
 |---|---|
-| Advertised name | `PMD` followed by padding and a device code, e.g. `PMD      0A2403E309` |
+| Advertised name | `PMD` followed by padding and a device code, e.g. `PMD      0B7C41E9F2` |
 | Advertised service | `0xFFE0` |
 | Manufacturer data | company id `0xF8F0` + the last 4 bytes of the device address (the address itself is also in the clear) |
 | Address type | public; address vendor prefix resolves to Texas Instruments |
