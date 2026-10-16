@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (branch viewer-driven-integration)
+## 1.0.0 - 2026-10-16
 
 ### Added
 - One-command installer for CoachProxy owners (`get.sh` -> `install_coachproxy.py`): checks the machine, copies the files, finds
